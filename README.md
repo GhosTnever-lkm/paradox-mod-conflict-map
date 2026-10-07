@@ -11,6 +11,18 @@
 3. Rename entries if needed and arrange them from higher to lower priority with the arrows or by dragging.
 4. Expand matching paths to see which archives contain them. Export a JSON report for later review.
 
+### How the analysis works
+
+```mermaid
+flowchart LR
+    A[Mod ZIP archives] --> B[Read ZIP central directories]
+    B --> C[Normalize and validate file paths]
+    C --> D[Group matching relative paths]
+    D --> E[Review using your chosen order]
+    E --> F[Export a JSON report]
+```
+
+The selected order is for review only. It does not configure the launcher or claim to reproduce the game's actual override behavior.
 The app does not change your launcher, mod files, or load order. It does not install, extract, or modify archives.
 
 ## What it checks
