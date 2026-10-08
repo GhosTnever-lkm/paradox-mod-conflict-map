@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1 - 2026-10-08
+
+- Exclude Workshop thumbnail and preview files at any folder depth in both ZIP and folder scans.
+- Present empty or unsafe-only archives as informational notices instead of error alerts.
+- Reset notice styling and accessibility roles when a new scan starts or a genuine error occurs.
+
 ## 0.3.0 - 2026-10-08
 
 - Normalize shared wrapper folders in ZIP archives so `ModA/common/x.txt` and `ModB/common/x.txt` compare as `common/x.txt`.

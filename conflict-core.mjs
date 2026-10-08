@@ -13,7 +13,7 @@ export function isServicePath(path) {
   if (parts.some((part) => ['.git', '.github', '.svn', '.hg', '__macosx'].includes(part))) return true;
   if (base === '.ds_store' || base === 'thumbs.db' || base === 'desktop.ini' || base === '.gitignore' || base === '.gitattributes' || base === '.editorconfig') return true;
   if (/^(readme|license|licence|copying|changelog|contributing|code_of_conduct|security|funding)(\..*)?$/i.test(base)) return parts.length === 1;
-  if (['thumbnail.png', 'preview.png', 'preview.jpg', 'preview.jpeg', 'workshop.jpg', 'workshop.png'].includes(base) && parts.length === 1) return true;
+  if (['thumbnail.png', 'preview.png', 'preview.jpg', 'preview.jpeg', 'workshop.jpg', 'workshop.png'].includes(base)) return true;
   if (base.endsWith('.mod') && parts.length === 1) return true;
   return false;
 }

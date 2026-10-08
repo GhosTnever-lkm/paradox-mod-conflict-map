@@ -234,6 +234,8 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
 
   async function addFiles(fileList) {
     ui.error.hidden = true;
+    ui.error.classList.remove('notice');
+    ui.error.setAttribute('role', 'alert');
     const files = [...fileList].filter((file) => file.name.toLowerCase().endsWith('.zip'));
     if (!files.length) { ui.error.textContent = t('invalidZip'); ui.error.hidden = false; return; }
     for (const file of files) {
@@ -242,15 +244,19 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
       try {
         const parsed = await readDirectory(file);
         if (!parsed.paths.length) {
-      const reason = parsed.skippedUnsafe ? t('unsafeOnly') : t('emptyZip');
+          const reason = parsed.skippedUnsafe ? t('unsafeOnly') : t('emptyZip');
           ui.error.textContent = `${file.name}: ${reason}`;
           ui.error.hidden = false;
+          ui.error.classList.add('notice');
+          ui.error.setAttribute('role', 'status');
           continue;
         }
         state.mods.push({ id: makeId(), name: safeModName(file.name), filename: file.name, sourceType: 'zip', sourceKey, file, ...parsed });
       } catch (error) {
         ui.error.textContent = `${file.name}: ${error.message || t('readFailed')}`;
         ui.error.hidden = false;
+        ui.error.classList.remove('notice');
+        ui.error.setAttribute('role', 'alert');
       }
     }
     state.demo = false;
@@ -259,11 +265,13 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
 
   function addFolders(fileList) {
     ui.error.hidden = true;
+    ui.error.classList.remove('notice');
+    ui.error.setAttribute('role', 'alert');
     const files = [...fileList];
-    if (!files.length) { ui.error.textContent = t('invalidFolder'); ui.error.hidden = false; return; }
-    if (files.length > MAX_ENTRIES) { ui.error.textContent = t('tooMany'); ui.error.hidden = false; return; }
+    if (!files.length) { ui.error.textContent = t('invalidFolder'); ui.error.hidden = false; ui.error.classList.remove('notice'); ui.error.setAttribute('role', 'alert'); return; }
+    if (files.length > MAX_ENTRIES) { ui.error.textContent = t('tooMany'); ui.error.hidden = false; ui.error.classList.remove('notice'); ui.error.setAttribute('role', 'alert'); return; }
     const groups = normalizeSelectedFolder(files);
-    if (!groups.length) { ui.error.textContent = t('invalidFolder'); ui.error.hidden = false; return; }
+    if (!groups.length) { ui.error.textContent = t('invalidFolder'); ui.error.hidden = false; ui.error.classList.remove('notice'); ui.error.setAttribute('role', 'alert'); return; }
     const warnings = [];
     const errors = [];
     if (groups.length > 1) warnings.push(t('multipleMods'));
