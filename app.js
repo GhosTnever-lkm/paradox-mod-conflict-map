@@ -1,3 +1,5 @@
+import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, normalizeFolderEntries, normalizeSelectedFolder } from './conflict-core.mjs';
+
 (() => {
   'use strict';
 
@@ -7,56 +9,60 @@
   const state = { locale: 'ru', mods: [], dragging: null, demo: false };
   const $ = (id) => document.getElementById(id);
   const ui = {
-    language: $('language'), input: $('zip-input'), dropzone: $('dropzone'), mods: $('mods'), empty: $('empty'),
+    language: $('language'), input: $('zip-input'), folderInput: $('folder-input'), folderButton: $('folder-button'), dropzone: $('dropzone'), mods: $('mods'), empty: $('empty'),
     conflicts: $('conflicts'), summary: $('summary'), error: $('error'), export: $('export'), demo: $('demo'), clear: $('clear')
   };
 
   const copy = {
     ru: {
-      eyebrow: 'БЕСПЛАТНО · ЛОКАЛЬНО · ДЛЯ МОДДЕРОВ', heroTitle: 'Узнай, где моды<br><em>перезаписывают файлы.</em>',
-      heroText: 'Сравни ZIP-архивы модов Paradox по внутренним путям. Переставляй порядок, чтобы увидеть потенциально перекрываемые файлы.',
-      toolLabel: 'КАРТА ПЕРЕСЕЧЕНИЙ', toolTitle: 'Добавь ZIP-архивы', demo: 'Загрузить пример', addZips: 'Выбрать ZIP',
+      eyebrow: 'БЕСПЛАТНО · ЛОКАЛЬНО · ДЛЯ МОДДЕРОВ', heroTitle: 'Найди одинаковые пути<br><em>в разных модах.</em>',
+      heroText: 'Сравни ZIP-архивы или папки модов Paradox по внутренним путям. Переставляй порядок, чтобы увидеть потенциальные пересечения файлов.',
+      step1: '01 / Добавь ZIP или папку', step2: '02 / Расставь порядок', step3: '03 / Изучи пересечения',
+      toolLabel: 'КАРТА ПЕРЕСЕЧЕНИЙ', toolTitle: 'Добавь ZIP или папки модов', demo: 'Загрузить пример', addZips: 'Выбрать ZIP', addFolder: 'Выбрать папку',
+      folderHint: 'Выбирай папку одного мода: ту, где лежат common, events, history и descriptor.mod.',
       workspaceHint: 'Порядок сверху вниз: нижние моды условно перекрывают файлы верхних, если игра обрабатывает одинаковые пути по этому правилу.',
-      orderLabel: 'ПРИОРИТЕТ ЗАГРУЗКИ', orderTitle: 'Моды и порядок', clear: 'Очистить', dropTitle: 'Перетащи сюда ZIP-архивы', dropSub: 'или нажми «Выбрать ZIP»',
-      empty: 'Добавь хотя бы два ZIP-мода, чтобы увидеть общие пути.', first: 'загружается раньше', last: 'загружается позже', reportLabel: 'ОТЧЁТ', reportTitle: 'Пересечения файлов', export: 'Экспорт JSON',
-      summaryEmpty: 'Результат появится после добавления двух или более архивов.', summaryMods: 'архива', summaryPaths: 'общих путей', summaryFiles: 'файловых записей', noOverlap: 'Одинаковых игровых путей не найдено в выбранных ZIP.',
-      pathHits: 'архива', earlier: 'выше в выбранном порядке', later: 'ниже в выбранном порядке', lastMod: 'последний в списке · возможное перекрытие',
+      orderLabel: 'ПОРЯДОК МОДОВ', orderTitle: 'Моды и порядок', clear: 'Очистить', dropTitle: 'Перетащи сюда ZIP-архивы', dropSub: 'ZIP или папку можно выбрать кнопками выше',
+      empty: 'Добавь хотя бы два мода, чтобы увидеть общие пути.', first: 'выше в выбранном порядке', last: 'ниже в выбранном порядке', reportLabel: 'ОТЧЁТ', reportTitle: 'Пересечения файлов', export: 'Экспорт JSON',
+      summaryEmpty: 'Результат появится после добавления двух или более модов.', summaryMods: 'мода', summaryPaths: 'общих путей', summaryFiles: 'файловых записей', noOverlap: 'Одинаковых игровых путей не найдено в выбранных модах.',
+      pathHits: 'мода', earlier: 'выше в выбранном порядке', later: 'ниже в выбранном порядке', lastMod: 'ниже в списке · возможное перекрытие',
       cautious: 'Совпадение пути не доказывает несовместимость. Это только сигнал для ручной проверки.',
       howLabel: 'КАК ЧИТАТЬ РЕЗУЛЬТАТ', howTitle: 'Пересечение — повод<br><em>проверить, а не паниковать.</em>',
-      howText: 'Одинаковый относительный путь в нескольких ZIP может означать, что один мод заменяет файл другого. Это не доказывает несовместимость: игра, формат данных и намеренные патчи влияют на результат.',
+      howText: 'Одинаковый относительный путь означает, что несколько модов содержат файл по одному адресу. Это может быть намеренная замена, патч или простое совпадение; само по себе это не доказывает несовместимость.',
       card1Title: 'Путь совпадает', card1: 'В отчёт попадают одинаковые пути файлов после нормализации регистра и разделителей.',
       card2Title: 'Порядок важен', card2: 'Отчёт показывает выбранный порядок и последний архив в списке. Фактические правила игры могут отличаться.',
-      card3Title: 'Содержимое не читается', card3: 'Приложение сравнивает метаданные ZIP. Оно не проверяет код, семантику файлов, зависимости и ошибки игры.',
-      privacyTitle: 'Архивы остаются на твоём устройстве', privacyText: 'Приложение читает только центральный каталог ZIP. Оно не распаковывает файлы, не отправляет их на сервер и не подключает внешние скрипты.',
-      footer: 'Открытый код · MIT · локальная обработка', invalidZip: 'Похоже, это не ZIP-архив или в нём повреждён центральный каталог.', tooLarge: 'Архив больше лимита 500 МБ.', tooMany: 'В архиве слишком много записей для безопасного просмотра.',
+      card3Title: 'Содержимое не читается', card3: 'Приложение использует пути из ZIP или выбранной папки. Оно не проверяет код, семантику файлов, зависимости и ошибки игры.',
+      privacyTitle: 'Файлы остаются на твоём устройстве', privacyText: 'Для папок приложение читает только относительные пути и размеры выбранных файлов; из ZIP — центральный каталог. Содержимое файлов не отправляется на сервер, сами архивы не распаковываются.',
+      footer: 'Открытый код · MIT · локальная обработка', invalidZip: 'Похоже, это не ZIP-архив или в нём повреждён центральный каталог.', invalidFolder: 'Не удалось получить список файлов выбранной папки. Выбери папку одного мода.', multipleMods: 'В выбранной папке найдено несколько модов. Каждый вложенный мод добавлен отдельно.', tooLarge: 'ZIP-архив превышает лимит 500 МБ.', expandedFileTooLarge: 'Файл внутри источника превышает лимит 1 ГБ.', expandedTotalTooLarge: 'Распакованный объём превышает лимит 4 ГБ.', tooMany: 'В ZIP или папке слишком много файлов для безопасного просмотра.', duplicateCount: 'дубликатов',
       badDirectory: 'Некорректный каталог ZIP.', zip64Overflow: 'ZIP64 содержит размер, который браузер не может безопасно обработать.', invalidPath: 'В архиве есть путь за пределами корня или абсолютный путь. Он исключён из карты.',
-      duplicateInternal: 'В одном архиве повторяется путь файла; отображается один путь, но число записей показано отдельно.', unsupported: 'Метод сжатия в этой проверке не влияет на чтение путей.',
-      countNote: 'учитываются только файлы внутри архива; descriptor.mod исключён.', demoModA: 'Northern Lights Overhaul', demoModB: 'UI Rebalance Patch', demoModC: 'Community Fix Pack',
-      demoName: 'пример · ZIP не загружен', downloadName: 'mod-conflict-map-report.json', dropped: 'Сюда можно перетащить несколько ZIP-файлов.',
+      duplicateInternal: 'В одном моде повторяется путь файла; отображается один путь, но число повторов показано отдельно.', unsupported: 'Метод сжатия в этой проверке не влияет на чтение путей.',
+      countNote: 'учитываются только игровые файлы; descriptor.mod исключён.', demoModA: 'Northern Lights Overhaul', demoModB: 'UI Rebalance Patch', demoModC: 'Community Fix Pack',
+      demoName: 'пример · файлы не загружены', folderSource: 'папка', zipSource: 'ZIP', downloadName: 'mod-conflict-map-report.json', dropped: 'Сюда можно перетащить несколько ZIP-файлов.',
       readFailed: 'Не удалось прочитать ZIP. Попробуй другой архив или проверь его в архиваторе.',
       sourceOne: 'Совпадающий файл', reportName: 'Mod Conflict Map', reportWarning: 'Это карта совпадающих путей, а не тест совместимости или безопасности.'
     },
     en: {
-      eyebrow: 'FREE · LOCAL · FOR MODDERS', heroTitle: 'See where mods<br><em>replace the same files.</em>',
-      heroText: 'Compare Paradox mod ZIP archives by internal file paths. Reorder them to inspect potential overrides.',
-      toolLabel: 'OVERLAP MAP', toolTitle: 'Add ZIP archives', demo: 'Load example', addZips: 'Choose ZIPs',
+      eyebrow: 'FREE · LOCAL · FOR MODDERS', heroTitle: 'Find matching paths<br><em>across your mods.</em>',
+      heroText: 'Compare Paradox mod ZIP archives or folders by internal file paths. Reorder them to inspect potential overlaps.',
+      step1: '01 / Add ZIP or folder', step2: '02 / Set your order', step3: '03 / Review overlaps',
+      toolLabel: 'OVERLAP MAP', toolTitle: 'Add ZIPs or mod folders', demo: 'Load example', addZips: 'Choose ZIPs', addFolder: 'Choose folder',
+      folderHint: 'Choose one mod folder: the directory containing common, events, history, and descriptor.mod.',
       workspaceHint: 'Order runs top to bottom. Lower items may override matching paths above them if the game applies that rule.',
-      orderLabel: 'LOAD PRIORITY', orderTitle: 'Mods and order', clear: 'Clear', dropTitle: 'Drop ZIP archives here', dropSub: 'or click “Choose ZIPs”',
-      empty: 'Add at least two mod ZIPs to find shared paths.', first: 'loaded earlier', last: 'loaded later', reportLabel: 'REPORT', reportTitle: 'File overlaps', export: 'Export JSON',
-      summaryEmpty: 'Results appear after you add two or more archives.', summaryMods: 'archives', summaryPaths: 'shared paths', summaryFiles: 'file entries', noOverlap: 'No identical game paths were found in the selected ZIPs.',
-      pathHits: 'archives', earlier: 'higher in selected order', later: 'lower in selected order', lastMod: 'last in list · possible override',
+      orderLabel: 'MOD ORDER', orderTitle: 'Mods and order', clear: 'Clear', dropTitle: 'Drop ZIP archives here', dropSub: 'Use the buttons above to choose ZIPs or a folder',
+      empty: 'Add at least two mods to find shared paths.', first: 'higher in selected order', last: 'lower in selected order', reportLabel: 'REPORT', reportTitle: 'File overlaps', export: 'Export JSON',
+      summaryEmpty: 'Results appear after you add two or more mods.', summaryMods: 'mods', summaryPaths: 'shared paths', summaryFiles: 'file entries', noOverlap: 'No identical game paths were found in the selected mods.',
+      pathHits: 'mods', earlier: 'higher in selected order', later: 'lower in selected order', lastMod: 'lower in the list · possible overlap',
       cautious: 'A matching path does not prove incompatibility. It is only a signal for manual review.',
       howLabel: 'READING THE RESULT', howTitle: 'An overlap means<br><em>review it, not panic.</em>',
-      howText: 'The same relative path in multiple ZIPs may mean that one mod replaces another mod’s file. It does not prove incompatibility: game behavior, file formats, and intentional patches affect the outcome.',
+      howText: 'The same relative path means multiple mods contain a file at the same address. That may be an intentional override, a patch, or a coincidence; by itself, it does not prove incompatibility.',
       card1Title: 'Matching paths', card1: 'The report groups identical file paths after normalizing case and separators.',
       card2Title: 'Order matters', card2: 'The report shows your selected order and the last archive in the list. Actual game rules may differ.',
-      card3Title: 'No contents are parsed', card3: 'The app compares ZIP metadata. It does not inspect code, file semantics, dependencies, or in-game errors.',
-      privacyTitle: 'Your archives stay on your device', privacyText: 'The app reads only the ZIP central directory. It does not extract files, upload them, or load external scripts.',
-      footer: 'Open source · MIT · processed locally', invalidZip: 'This does not look like a ZIP archive or its central directory is damaged.', tooLarge: 'Archive exceeds the 500 MB limit.', tooMany: 'Archive has too many entries to inspect safely.',
+      card3Title: 'No contents are parsed', card3: 'The app uses paths from ZIPs or the selected folder. It does not inspect code, file semantics, dependencies, or in-game errors.',
+      privacyTitle: 'Your files stay on your device', privacyText: 'For folders, the app reads only selected file paths and sizes; for ZIPs, only the central directory. It never uploads file contents or extracts archives.',
+      footer: 'Open source · MIT · processed locally', invalidZip: 'This does not look like a ZIP archive or its central directory is damaged.', invalidFolder: 'Could not read the selected folder file list. Choose one mod folder.', multipleMods: 'Multiple mods were found in the selected folder. Each nested mod was added separately.', tooLarge: 'ZIP archive exceeds the 500 MB limit.', expandedFileTooLarge: 'A file inside the source exceeds the 1 GB limit.', expandedTotalTooLarge: 'Expanded content exceeds the 4 GB limit.', tooMany: 'ZIP or folder has too many files to inspect safely.', duplicateCount: 'duplicates',
       badDirectory: 'Invalid ZIP central directory.', zip64Overflow: 'ZIP64 contains a size the browser cannot process safely.', invalidPath: 'Archive contains an absolute or out-of-root path. It was excluded from the map.',
       duplicateInternal: 'A file path repeats within one archive; one path is shown, while entry counts remain separate.', unsupported: 'Compression method does not affect path reading in this inspection.',
-      countNote: 'only files inside the archive are counted; descriptor.mod is excluded.', demoModA: 'Northern Lights Overhaul', demoModB: 'UI Rebalance Patch', demoModC: 'Community Fix Pack',
-      demoName: 'example · no ZIP uploaded', downloadName: 'mod-conflict-map-report.json', dropped: 'You can drop multiple ZIP files here.',
+      countNote: 'only game files are counted; descriptor.mod is excluded.', demoModA: 'Northern Lights Overhaul', demoModB: 'UI Rebalance Patch', demoModC: 'Community Fix Pack',
+      demoName: 'example · no files loaded', folderSource: 'folder', zipSource: 'ZIP', downloadName: 'mod-conflict-map-report.json', dropped: 'You can drop multiple ZIP files here.',
       readFailed: 'Could not read this ZIP. Try another archive or inspect it with an archive tool.',
       sourceOne: 'Matching file', reportName: 'Mod Conflict Map', reportWarning: 'This is a path overlap map, not a compatibility or security test.'
     }
@@ -100,15 +106,8 @@
   }
 
   function findEndRecord(bytes) {
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    const min = Math.max(0, bytes.length - 65_557);
-    for (let offset = bytes.length - 22; offset >= min; offset--) {
-      if (view.getUint32(offset, true) === 0x06054b50) {
-        const commentLength = view.getUint16(offset + 20, true);
-        if (offset + 22 + commentLength === bytes.length) return { view, offset };
-      }
-    }
-    throw new Error(t('invalidZip'));
+    try { return locateEndRecord(bytes); }
+    catch { throw new Error(t('invalidZip')); }
   }
 
   async function readDirectory(file) {
@@ -194,27 +193,53 @@
       const unsafe = name.startsWith('/') || /^[a-z]:\//i.test(name) || name.split('/').includes('..') || name.includes('\u0000');
       if (unsafe) { skippedUnsafe++; continue; }
       if (lower.split('/').pop() === 'descriptor.mod') continue;
-      if (expanded > 1024 * 1024 * 1024 || expandedTotal + expanded > MAX_TOTAL_EXPANDED) throw new Error(t('tooLarge'));
+      if (expanded > 1024 * 1024 * 1024) throw new Error(t('expandedFileTooLarge'));
+      if (expandedTotal + expanded > MAX_TOTAL_EXPANDED) throw new Error(t('expandedTotalTooLarge'));
       expandedTotal += expanded;
       if (seenInArchive.has(lower)) duplicateEntries++;
       else { seenInArchive.add(lower); paths.push({ key: lower, display: name, size: expanded, compressed, method: view.getUint16(offset - (46 + nameLength + extraLength + commentLength) + 10, true), encrypted: Boolean(flags & 1) }); }
     }
     if (offset !== directory.length) throw new Error(t('badDirectory'));
-    if (!paths.length) throw new Error(t('invalidZip'));
+    // A structurally valid archive may contain only descriptor metadata or unsafe entries.
     return { paths, skippedUnsafe, duplicateEntries, expandedTotal, fileSize: file.size };
   }
 
   function safeModName(name) { return String(name).replace(/\.zip$/i, '').replace(/[<>"'&]/g, '').slice(0, 90) || 'Mod'; }
+
+  function safeRelativePath(path) {
+    const normalized = String(path).replace(/\\/g, '/');
+    if (!normalized || normalized.startsWith('/') || /^[a-z]:\//i.test(normalized) || normalized.split('/').includes('..') || normalized.includes('\u0000')) return null;
+    return normalized;
+  }
+
+  function parseFolderGroup(group) {
+    if (group.entries.length > MAX_ENTRIES) throw new Error(t('tooMany'));
+    let expandedTotal = 0;
+    for (const { file, relative } of group.entries) {
+      if (file.size > 1024 * 1024 * 1024) throw new Error(t('expandedFileTooLarge'));
+      if (expandedTotal + file.size > MAX_TOTAL_EXPANDED) throw new Error(t('expandedTotalTooLarge'));
+      expandedTotal += file.size;
+    }
+    const { paths, skippedUnsafe, duplicateEntries } = normalizeFolderEntries(group.entries, group.modRoot);
+    if (!paths.length && !skippedUnsafe) throw new Error(t('invalidFolder'));
+    const modLabel = group.modRoot ? `${group.root}/${group.modRoot}` : group.root;
+    return {
+      id: makeId(), name: safeModName(group.modRoot ? group.modRoot.split('/').at(-1) : group.root),
+      filename: modLabel, sourceType: 'folder', sourceKey: `folder:${modLabel.toLowerCase()}:${group.entries.length}:${expandedTotal}`,
+      paths, skippedUnsafe, duplicateEntries, expandedTotal, fileSize: expandedTotal
+    };
+  }
 
   async function addFiles(fileList) {
     ui.error.hidden = true;
     const files = [...fileList].filter((file) => file.name.toLowerCase().endsWith('.zip'));
     if (!files.length) { ui.error.textContent = t('invalidZip'); ui.error.hidden = false; return; }
     for (const file of files) {
-      if (state.mods.some((mod) => mod.file && mod.file.name === file.name && mod.file.size === file.size && mod.file.lastModified === file.lastModified)) continue;
+      const sourceKey = `zip:${file.name.toLowerCase()}:${file.size}:${file.lastModified}`;
+      if (state.mods.some((mod) => mod.sourceKey === sourceKey)) continue;
       try {
         const parsed = await readDirectory(file);
-        state.mods.push({ id: makeId(), name: safeModName(file.name), filename: file.name, file, ...parsed });
+        state.mods.push({ id: makeId(), name: safeModName(file.name), filename: file.name, sourceType: 'zip', sourceKey, file, ...parsed });
       } catch (error) {
         ui.error.textContent = `${file.name}: ${error.message || t('readFailed')}`;
         ui.error.hidden = false;
@@ -224,15 +249,29 @@
     render();
   }
 
+  function addFolders(fileList) {
+    ui.error.hidden = true;
+    const files = [...fileList];
+    if (!files.length) { ui.error.textContent = t('invalidFolder'); ui.error.hidden = false; return; }
+    if (files.length > MAX_ENTRIES) { ui.error.textContent = t('tooMany'); ui.error.hidden = false; return; }
+    const groups = normalizeSelectedFolder(files);
+    if (!groups.length) { ui.error.textContent = t('invalidFolder'); ui.error.hidden = false; return; }
+    if (groups.length > 1) { ui.error.textContent = t('multipleMods'); ui.error.hidden = false; }
+    for (const group of groups) {
+      try {
+        const parsed = parseFolderGroup(group);
+        if (!state.mods.some((mod) => mod.sourceKey === parsed.sourceKey)) state.mods.push(parsed);
+      } catch (error) {
+        ui.error.textContent = `${group.root}${group.modRoot ? `/${group.modRoot}` : ''}: ${error.message || t('invalidFolder')}`;
+        ui.error.hidden = false;
+      }
+    }
+    state.demo = false;
+    render();
+  }
+
   function collectOverlaps() {
-    const byPath = new Map();
-    state.mods.forEach((mod, modIndex) => {
-      mod.paths.forEach((entry) => {
-        if (!byPath.has(entry.key)) byPath.set(entry.key, []);
-        byPath.get(entry.key).push({ modIndex, mod, entry });
-      });
-    });
-    return [...byPath.entries()].filter(([, hits]) => hits.length > 1).map(([key, hits]) => ({ key, hits })).sort((a, b) => b.hits.length - a.hits.length || a.key.localeCompare(b.key));
+    return groupOverlaps(state.mods);
   }
 
   function renderSummary(overlaps) {
@@ -265,7 +304,7 @@
   }
 
   function renderMods() {
-    ui.mods.innerHTML = state.mods.map((mod, index) => `<li class="mod" draggable="${!state.demo}" data-id="${esc(mod.id)}"><span class="mod-index">${String(index + 1).padStart(2, '0')}</span><div class="mod-info"><input aria-label="Mod name" maxlength="90" value="${esc(mod.name)}" ${state.demo ? 'readonly' : ''}><small>${esc(mod.filename)} · ${mod.paths.length} ${esc(t('summaryFiles'))}${mod.skippedUnsafe ? ` · ⚠ ${mod.skippedUnsafe}` : ''}</small></div><div class="mod-actions"><button class="icon-button" data-action="up" aria-label="Move up" ${index === 0 || state.demo ? 'disabled' : ''}>↑</button><button class="icon-button" data-action="down" aria-label="Move down" ${index === state.mods.length - 1 || state.demo ? 'disabled' : ''}>↓</button><button class="icon-button remove" data-action="remove" aria-label="Remove mod" ${state.demo ? 'disabled' : ''}>×</button></div></li>`).join('');
+    ui.mods.innerHTML = state.mods.map((mod, index) => `<li class="mod" draggable="${!state.demo}" data-id="${esc(mod.id)}"><span class="mod-index">${String(index + 1).padStart(2, '0')}</span><div class="mod-info"><input aria-label="Mod name" maxlength="90" value="${esc(mod.name)}" ${state.demo ? 'readonly' : ''}><small>${esc(t(mod.sourceType === 'folder' ? 'folderSource' : 'zipSource'))}: ${esc(mod.filename)} · ${mod.paths.length} ${esc(t('summaryFiles'))}${mod.duplicateEntries ? ` · ${mod.duplicateEntries} ${esc(t('duplicateCount'))}` : ''}${mod.skippedUnsafe ? ` · ⚠ ${mod.skippedUnsafe}` : ''}</small></div><div class="mod-actions"><button class="icon-button" data-action="up" aria-label="Move up" ${index === 0 || state.demo ? 'disabled' : ''}>↑</button><button class="icon-button" data-action="down" aria-label="Move down" ${index === state.mods.length - 1 || state.demo ? 'disabled' : ''}>↓</button><button class="icon-button remove" data-action="remove" aria-label="Remove mod" ${state.demo ? 'disabled' : ''}>×</button></div></li>`).join('');
     ui.empty.hidden = state.mods.length > 0;
   }
 
@@ -282,8 +321,8 @@
       tool: t('reportName'),
       generatedAt: new Date().toISOString(),
       notice: t('reportWarning'),
-      loadOrderTopToBottom: state.mods.map((mod, index) => ({ position: index + 1, name: mod.name, archive: mod.filename, fileEntries: mod.paths.length, skippedUnsafePaths: mod.skippedUnsafe, duplicateEntriesWithinArchive: mod.duplicateEntries })),
-      matchingPaths: overlaps.map(({ key, hits }) => ({ path: hits[0].entry.display, normalizedPath: key, archives: hits.map(({ mod, modIndex, entry }) => ({ name: mod.name, archive: mod.filename, position: modIndex + 1, sizeBytes: entry.size })) })),
+      loadOrderTopToBottom: state.mods.map((mod, index) => ({ position: index + 1, name: mod.name, sourceType: mod.sourceType || 'example', source: mod.filename, archive: mod.filename, fileEntries: mod.paths.length, skippedUnsafePaths: mod.skippedUnsafe, duplicateEntriesWithinArchive: mod.duplicateEntries, duplicateEntriesWithinSource: mod.duplicateEntries })),
+      matchingPaths: overlaps.map(({ key, hits }) => ({ path: hits[0].entry.display, normalizedPath: key, archives: hits.map(({ mod, modIndex, entry }) => ({ name: mod.name, sourceType: mod.sourceType || 'example', source: mod.filename, archive: mod.filename, position: modIndex + 1, sizeBytes: entry.size })) })),
       limitations: t('reportWarning')
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json;charset=utf-8' }));
@@ -310,10 +349,19 @@
   }
 
   ui.input.addEventListener('change', (event) => { addFiles(event.target.files); event.target.value = ''; });
+  ui.folderInput.addEventListener('change', (event) => { addFolders(event.target.files); event.target.value = ''; });
+  document.querySelectorAll('.file-picker-label').forEach((label) => {
+    label.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      $(label.htmlFor).click();
+    });
+  });
   ui.demo.addEventListener('click', loadDemo);
   ui.clear.addEventListener('click', () => { state.mods = []; state.demo = false; ui.error.hidden = true; render(); });
   ui.export.addEventListener('click', downloadReport);
   ui.language.addEventListener('click', () => setLanguage(state.locale === 'ru' ? 'en' : 'ru'));
+  if (!('webkitdirectory' in ui.folderInput)) ui.folderButton.hidden = true;
   ui.dropzone.addEventListener('dragover', (event) => { event.preventDefault(); ui.dropzone.classList.add('drag'); });
   ui.dropzone.addEventListener('dragleave', () => ui.dropzone.classList.remove('drag'));
   ui.dropzone.addEventListener('drop', (event) => { event.preventDefault(); ui.dropzone.classList.remove('drag'); addFiles(event.dataTransfer.files); });
@@ -335,7 +383,12 @@
   $('mods').addEventListener('input', (event) => {
     if (!event.target.matches('.mod-info input')) return;
     const item = event.target.closest('.mod'); const mod = state.mods.find((entry) => entry.id === item.dataset.id);
-    if (mod) mod.name = event.target.value.slice(0, 90);
+    if (mod) {
+      mod.name = event.target.value.slice(0, 90);
+      const overlaps = collectOverlaps();
+      renderSummary(overlaps);
+      renderConflicts(overlaps);
+    }
   });
 
   function initStaticLocalization() {
