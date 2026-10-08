@@ -24,6 +24,54 @@ test('ZIP wrapper is detected from descriptor.mod when metadata and unrelated ro
   assert.deepEqual(result.paths.map((item) => item.display), ['common/x.txt']);
 });
 
+test('ambiguous descriptor wrapper preserves outside game paths and reports a warning', () => {
+  const result = normalizeZipEntries([
+    entry('Mod/descriptor.mod'),
+    entry('Mod/common/ideas/x.txt', 17),
+    entry('common/events/other.txt', 23),
+    entry('README.md')
+  ]);
+  assert.deepEqual(result.paths.map((item) => item.display), ['Mod/common/ideas/x.txt', 'common/events/other.txt']);
+  assert.deepEqual(result.warnings, [{ code: 'wrapperNotApplied', params: { wrapper: 'Mod', count: 1 } }]);
+  assert.equal(result.paths[0].size, 17);
+  assert.equal(result.paths[0].compressed, 17);
+});
+
+test('multiple ZIP descriptor roots are preserved and reported without choosing one', () => {
+  const result = normalizeZipEntries([
+    entry('ModA/descriptor.mod'), entry('ModA/common/a.txt'),
+    entry('ModB/descriptor.mod'), entry('ModB/events/b.txt')
+  ]);
+  assert.deepEqual(result.paths.map((item) => item.display), ['ModA/common/a.txt', 'ModB/events/b.txt']);
+  assert.deepEqual(result.warnings, [{ code: 'multipleDescriptorRoots', params: { roots: 'ModA, ModB' } }]);
+});
+
+test('ambiguous common ZIP folder preserves outside game paths and reports a warning', () => {
+  const result = normalizeZipEntries([entry('MyMod/common/a.txt'), entry('common/events/b.txt'), entry('README.md')]);
+  assert.deepEqual(result.paths.map((item) => item.display), ['MyMod/common/a.txt', 'common/events/b.txt']);
+  assert.deepEqual(result.warnings, [{ code: 'commonFolderNotApplied', params: { wrapper: 'MyMod', count: 1 } }]);
+});
+
+test('service entries outside a valid ZIP wrapper do not block stripping and remain counted', () => {
+  const result = normalizeZipEntries([
+    entry('Mod/descriptor.mod'), entry('Mod/common/a.txt'), entry('README.md'), entry('.git/config')
+  ]);
+  assert.deepEqual(result.paths.map((item) => item.display), ['common/a.txt']);
+  assert.equal(result.skippedService, 2);
+  assert.equal(result.wrapper, 'Mod');
+  assert.deepEqual(result.warnings, []);
+});
+
+test('ZIP wrapper matching is case-insensitive and unsafe paths do not affect detection', () => {
+  const result = normalizeZipEntries([
+    entry('Mod/descriptor.mod'), entry('MOD/common/a.txt'),
+    { ...entry('../escape.txt'), unsafe: true }
+  ]);
+  assert.deepEqual(result.paths.map((item) => item.display), ['common/a.txt']);
+  assert.equal(result.skippedUnsafe, 1);
+  assert.equal(result.wrapper, 'Mod');
+});
+
 test('service files and VCS internals do not become overlaps', () => {
   const paths = ['thumbnail.png', 'README.md', '.git/config', '.gitignore', 'common/game.txt'];
   const result = normalizeZipEntries(paths.map((path) => entry(path)));

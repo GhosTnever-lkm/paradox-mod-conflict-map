@@ -18,24 +18,97 @@ export function isServicePath(path) {
   return false;
 }
 
-export function stripCommonWrapper(paths) {
-  if (!paths.length) return paths;
-  const descriptorDirs = paths.filter((entry) => entry.display.split('/').at(-1).toLowerCase() === 'descriptor.mod')
-    .map((entry) => entry.display.split('/').slice(0, -1).join('/'));
-  let wrapper = '';
-  if (descriptorDirs.length === 1 && descriptorDirs[0]) wrapper = descriptorDirs[0];
-  else if (!descriptorDirs.length) {
-    const candidates = [...new Set(paths.map((entry) => entry.display.split('/')[0]).filter(Boolean))];
-    const candidate = candidates.length === 1 ? candidates[0] : '';
-    if (candidate && paths.some((entry) => entry.display.toLowerCase().startsWith(`${candidate.toLowerCase()}/`) && GAME_CONTENT_ROOTS.has(entry.display.slice(candidate.length + 1).split('/')[0].toLowerCase()))) wrapper = candidate;
+function normalizeEntrySlashes(value) {
+  return String(value ?? '').replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/^\/+/, '');
+}
+
+function entryBaseName(display) {
+  const path = normalizeEntrySlashes(display);
+  return path.slice(path.lastIndexOf('/') + 1).toLowerCase();
+}
+
+function descriptorRoot(entry) {
+  const path = normalizeEntrySlashes(entry.display);
+  const index = path.lastIndexOf('/');
+  return { key: (index < 0 ? '' : path.slice(0, index)).toLowerCase(), display: index < 0 ? '' : path.slice(0, index) };
+}
+
+function entryIsInsideFolder(display, folderKey) {
+  const pathKey = normalizeEntrySlashes(display).toLowerCase();
+  return !folderKey || pathKey.startsWith(`${folderKey}/`);
+}
+
+function rewriteUnderWrapper(entry, wrapperKey) {
+  if (entry.unsafe || !entryIsInsideFolder(entry.display, wrapperKey)) return entry;
+  const parts = normalizeEntrySlashes(entry.display).split('/').filter(Boolean);
+  const wrapperParts = wrapperKey.split('/').filter(Boolean);
+  const relative = parts.slice(wrapperParts.length).join('/');
+  return { ...entry, display: relative, key: relative.toLowerCase() };
+}
+
+function detectZipWrapper(entries) {
+  const safeEntries = entries.filter((entry) => !entry.unsafe && entry.display);
+  const descriptors = new Map();
+  for (const entry of safeEntries) {
+    if (entryBaseName(entry.display) !== 'descriptor.mod') continue;
+    const root = descriptorRoot(entry);
+    if (!descriptors.has(root.key)) descriptors.set(root.key, root.display);
   }
-  if (!wrapper) return paths;
-  const prefix = `${wrapper}/`.toLowerCase();
-  const stripped = paths.filter((entry) => entry.display.toLowerCase().startsWith(prefix))
-    .map((entry) => ({ ...entry, display: entry.display.slice(wrapper.length + 1), key: entry.display.slice(wrapper.length + 1).toLowerCase() }));
-  // Only use a descriptor-derived root when it actually contains game files;
-  // otherwise preserve all paths and report an empty game archive to the UI.
-  return stripped.length ? stripped : paths;
+
+  const meaningful = safeEntries.filter((entry) =>
+    entryBaseName(entry.display) !== 'descriptor.mod' && !isServicePath(entry.display)
+  );
+
+  if (descriptors.size > 1) {
+    return {
+      entries,
+      wrapper: null,
+      warnings: [{ code: 'multipleDescriptorRoots', params: { roots: [...descriptors.values()].map((root) => root || '(root)').join(', ') } }]
+    };
+  }
+
+  if (descriptors.size === 1) {
+    const [wrapperKey, wrapperDisplay] = [...descriptors.entries()][0];
+    if (!wrapperKey) return { entries, wrapper: '', warnings: [] };
+
+    const outside = meaningful.filter((entry) => !entryIsInsideFolder(entry.display, wrapperKey));
+    if (outside.length) {
+      return {
+        entries,
+        wrapper: null,
+        warnings: [{ code: 'wrapperNotApplied', params: { wrapper: wrapperDisplay, count: outside.length } }]
+      };
+    }
+
+    return { entries: entries.map((entry) => rewriteUnderWrapper(entry, wrapperKey)), wrapper: wrapperDisplay, warnings: [] };
+  }
+
+  // A candidate must look like a wrapper around a recognized game content root.
+  const candidates = new Map();
+  for (const entry of meaningful) {
+    const path = normalizeEntrySlashes(entry.display);
+    const firstSlash = path.indexOf('/');
+    if (firstSlash < 1) continue;
+    const top = path.slice(0, firstSlash);
+    const key = top.toLowerCase();
+    if (GAME_CONTENT_ROOTS.has(key)) continue;
+    const next = path.slice(firstSlash + 1).split('/')[0].toLowerCase();
+    if (GAME_CONTENT_ROOTS.has(next) && !candidates.has(key)) candidates.set(key, top);
+  }
+
+  if (candidates.size !== 1) return { entries, wrapper: null, warnings: [] };
+
+  const [wrapperKey, wrapperDisplay] = [...candidates.entries()][0];
+  const outside = meaningful.filter((entry) => !entryIsInsideFolder(entry.display, wrapperKey));
+  if (outside.length) {
+    return {
+      entries,
+      wrapper: null,
+      warnings: [{ code: 'commonFolderNotApplied', params: { wrapper: wrapperDisplay, count: outside.length } }]
+    };
+  }
+
+  return { entries: entries.map((entry) => rewriteUnderWrapper(entry, wrapperKey)), wrapper: wrapperDisplay, warnings: [] };
 }
 
 export function collectOverlaps(mods) {
@@ -119,19 +192,21 @@ export function normalizeFolderEntries(entries, modRoot = '') {
 }
 
 export function normalizeZipEntries(entries) {
+  const root = detectZipWrapper(entries);
   const paths = [];
   const seen = new Set();
   let duplicateEntries = 0;
   let skippedService = 0;
   let skippedUnsafe = 0;
-  for (const entry of stripCommonWrapper(entries)) {
+  for (const entry of root.entries) {
     if (entry.unsafe) { skippedUnsafe++; continue; }
-    if (!entry.display || entry.display.split('/').at(-1).toLowerCase() === 'descriptor.mod') continue;
+    if (!entry.display || entryBaseName(entry.display) === 'descriptor.mod') continue;
     if (isServicePath(entry.display)) { skippedService++; continue; }
-    if (seen.has(entry.key)) duplicateEntries++;
-    else { seen.add(entry.key); paths.push(entry); }
+    const key = normalizeEntrySlashes(entry.key || entry.display).toLowerCase();
+    if (seen.has(key)) duplicateEntries++;
+    else { seen.add(key); paths.push({ ...entry, key, display: normalizeEntrySlashes(entry.display) }); }
   }
-  return { paths, duplicateEntries, skippedService, skippedUnsafe };
+  return { paths, duplicateEntries, skippedService, skippedUnsafe, warnings: root.warnings, wrapper: root.wrapper };
 }
 
 export function findEndRecord(bytes) {

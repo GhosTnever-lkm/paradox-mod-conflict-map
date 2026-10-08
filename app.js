@@ -38,7 +38,10 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
       countNote: 'учитываются только игровые файлы; descriptor.mod исключён.', demoModA: 'Northern Lights Overhaul', demoModB: 'UI Rebalance Patch', demoModC: 'Community Fix Pack',
       demoName: 'пример · файлы не загружены', folderSource: 'папка', zipSource: 'ZIP', downloadName: 'mod-conflict-map-report.json', dropped: 'Сюда можно перетащить несколько ZIP-файлов.',
       readFailed: 'Не удалось прочитать ZIP. Попробуй другой архив или проверь его в архиваторе.',
-      sourceOne: 'Совпадающий файл', reportName: 'Mod Conflict Map', reportWarning: 'Это карта совпадающих путей, а не тест совместимости или безопасности.'
+      sourceOne: 'Совпадающий файл', reportName: 'Mod Conflict Map', reportWarning: 'Это карта совпадающих путей, а не тест совместимости или безопасности.',
+      sourceWarning: 'предупреждение о структуре', wrapperNotApplied: 'В ZIP найден descriptor.mod внутри «{wrapper}», но снаружи обнаружено игровых файлов: {count}. Сохранены исходные пути, корень не выделен.',
+      multipleDescriptorRoots: 'В ZIP несколько descriptor.mod в разных папках: {roots}. Сохранены все пути, один корень не выбран.',
+      commonFolderNotApplied: 'В ZIP найдена общая папка «{wrapper}», но вне неё обнаружено игровых файлов: {count}. Папка не удалена.'
     },
     en: {
       eyebrow: 'FREE · LOCAL · FOR MODDERS', heroTitle: 'Find matching paths<br><em>across your mods.</em>',
@@ -64,11 +67,15 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
       countNote: 'only game files are counted; descriptor.mod is excluded.', demoModA: 'Northern Lights Overhaul', demoModB: 'UI Rebalance Patch', demoModC: 'Community Fix Pack',
       demoName: 'example · no files loaded', folderSource: 'folder', zipSource: 'ZIP', downloadName: 'mod-conflict-map-report.json', dropped: 'You can drop multiple ZIP files here.',
       readFailed: 'Could not read this ZIP. Try another archive or inspect it with an archive tool.',
-      sourceOne: 'Matching file', reportName: 'Mod Conflict Map', reportWarning: 'This is a path overlap map, not a compatibility or security test.'
+      sourceOne: 'Matching file', reportName: 'Mod Conflict Map', reportWarning: 'This is a path overlap map, not a compatibility or security test.',
+      sourceWarning: 'ambiguous archive layout', wrapperNotApplied: 'The ZIP has descriptor.mod inside “{wrapper}”, but {count} game file(s) are outside it. All archive-relative paths were kept; no root was selected.',
+      multipleDescriptorRoots: 'The ZIP has multiple descriptor.mod files in different folders: {roots}. All paths were kept; no single root was selected.',
+      commonFolderNotApplied: 'The ZIP has a common folder “{wrapper}”, but {count} game file(s) are outside it. The common folder was not removed.'
     }
   };
 
   const t = (key) => copy[state.locale][key] || key;
+  const formatMessage = (key, params = {}) => t(key).replace(/\{([\w]+)\}/g, (match, name) => params[name] == null ? match : String(params[name]));
   const esc = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 
   function setLanguage(locale) {
@@ -145,7 +152,6 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
     const paths = [];
     let offset = 0;
     let expandedTotal = 0;
-    let skippedUnsafe = 0;
     let duplicateEntries = 0;
     let skippedService = 0;
     const rawPaths = [];
@@ -193,7 +199,7 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
       if (name.endsWith('/') || name.endsWith('\u0000')) continue;
       const lower = name.toLowerCase();
       const unsafe = name.startsWith('/') || /^[a-z]:\//i.test(name) || name.split('/').includes('..') || name.includes('\u0000');
-      if (unsafe) { skippedUnsafe++; rawPaths.push({ key: lower, display: name, unsafe: true }); continue; }
+      if (unsafe) { rawPaths.push({ key: lower, display: name, unsafe: true }); continue; }
       if (expanded > 1024 * 1024 * 1024) throw new Error(t('expandedFileTooLarge'));
       if (expandedTotal + expanded > MAX_TOTAL_EXPANDED) throw new Error(t('expandedTotalTooLarge'));
       expandedTotal += expanded;
@@ -203,7 +209,7 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
     if (offset !== directory.length) throw new Error(t('badDirectory'));
     // A structurally valid archive may contain only descriptor metadata or unsafe entries.
     const normalized = normalizeZipEntries(rawPaths);
-    return { paths: normalized.paths, skippedUnsafe: skippedUnsafe + normalized.skippedUnsafe, duplicateEntries: duplicateEntries + normalized.duplicateEntries, skippedService: normalized.skippedService, expandedTotal, fileSize: file.size };
+    return { paths: normalized.paths, skippedUnsafe: normalized.skippedUnsafe, duplicateEntries: duplicateEntries + normalized.duplicateEntries, skippedService: normalized.skippedService, warnings: normalized.warnings, wrapper: normalized.wrapper, expandedTotal, fileSize: file.size };
   }
 
   function safeModName(name) { return String(name).replace(/\.zip$/i, '').replace(/[<>"'&]/g, '').slice(0, 90) || 'Mod'; }
@@ -238,6 +244,8 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
     ui.error.setAttribute('role', 'alert');
     const files = [...fileList].filter((file) => file.name.toLowerCase().endsWith('.zip'));
     if (!files.length) { ui.error.textContent = t('invalidZip'); ui.error.hidden = false; return; }
+    const warnings = [];
+    const errors = [];
     for (const file of files) {
       const sourceKey = `zip:${file.name.toLowerCase()}:${file.size}:${file.lastModified}`;
       if (state.mods.some((mod) => mod.sourceKey === sourceKey)) continue;
@@ -245,19 +253,21 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
         const parsed = await readDirectory(file);
         if (!parsed.paths.length) {
           const reason = parsed.skippedUnsafe ? t('unsafeOnly') : t('emptyZip');
-          ui.error.textContent = `${file.name}: ${reason}`;
-          ui.error.hidden = false;
-          ui.error.classList.add('notice');
-          ui.error.setAttribute('role', 'status');
+          warnings.push(`${file.name}: ${reason}`);
+          warnings.push(...(parsed.warnings || []).map((warning) => `${file.name}: ${formatMessage(warning.code, warning.params)}`));
           continue;
         }
         state.mods.push({ id: makeId(), name: safeModName(file.name), filename: file.name, sourceType: 'zip', sourceKey, file, ...parsed });
+        warnings.push(...(parsed.warnings || []).map((warning) => `${file.name}: ${formatMessage(warning.code, warning.params)}`));
       } catch (error) {
-        ui.error.textContent = `${file.name}: ${error.message || t('readFailed')}`;
-        ui.error.hidden = false;
-        ui.error.classList.remove('notice');
-        ui.error.setAttribute('role', 'alert');
+        errors.push(`${file.name}: ${error.message || t('readFailed')}`);
       }
+    }
+    if (errors.length || warnings.length) {
+      ui.error.textContent = [...errors, ...warnings].join(' ');
+      ui.error.hidden = false;
+      ui.error.classList.toggle('notice', errors.length === 0 && warnings.length > 0);
+      ui.error.setAttribute('role', errors.length ? 'alert' : 'status');
     }
     state.demo = false;
     render();
@@ -325,7 +335,14 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
   }
 
   function renderMods() {
-    ui.mods.innerHTML = state.mods.map((mod, index) => `<li class="mod" draggable="${!state.demo}" data-id="${esc(mod.id)}"><span class="mod-index">${String(index + 1).padStart(2, '0')}</span><div class="mod-info"><input aria-label="Mod name" maxlength="90" value="${esc(mod.name)}" ${state.demo ? 'readonly' : ''}><small>${esc(t(mod.sourceType === 'folder' ? 'folderSource' : 'zipSource'))}: ${esc(mod.filename)} · ${mod.paths.length} ${esc(t('summaryFiles'))}${mod.duplicateEntries ? ` · ${mod.duplicateEntries} ${esc(t('duplicateCount'))}` : ''}${mod.skippedUnsafe ? ` · ⚠ ${mod.skippedUnsafe}` : ''}${mod.skippedService ? ` · ${mod.skippedService} ${esc(t('skippedServices'))}` : ''}</small></div><div class="mod-actions"><button class="icon-button" data-action="up" aria-label="Move up" ${index === 0 || state.demo ? 'disabled' : ''}>↑</button><button class="icon-button" data-action="down" aria-label="Move down" ${index === state.mods.length - 1 || state.demo ? 'disabled' : ''}>↓</button><button class="icon-button remove" data-action="remove" aria-label="Remove mod" ${state.demo ? 'disabled' : ''}>×</button></div></li>`).join('');
+    ui.mods.innerHTML = state.mods.map((mod, index) => {
+      const sourceWarnings = mod.warnings || (mod.warning ? [{ code: mod.warning, params: {} }] : []);
+      const warningText = sourceWarnings.map((warning) => formatMessage(warning.code, warning.params)).join(' ');
+      const warningBadge = warningText
+        ? ` · <span class="mod-warning" title="${esc(warningText)}">⚠ ${esc(t('sourceWarning'))}</span>`
+        : '';
+      return `<li class="mod" draggable="${!state.demo}" data-id="${esc(mod.id)}"><span class="mod-index">${String(index + 1).padStart(2, '0')}</span><div class="mod-info"><input aria-label="Mod name" maxlength="90" value="${esc(mod.name)}" ${state.demo ? 'readonly' : ''}><small>${esc(t(mod.sourceType === 'folder' ? 'folderSource' : 'zipSource'))}: ${esc(mod.filename)} · ${mod.paths.length} ${esc(t('summaryFiles'))}${mod.duplicateEntries ? ` · ${mod.duplicateEntries} ${esc(t('duplicateCount'))}` : ''}${mod.skippedUnsafe ? ` · ⚠ ${mod.skippedUnsafe}` : ''}${mod.skippedService ? ` · ${mod.skippedService} ${esc(t('skippedServices'))}` : ''}${warningBadge}</small></div><div class="mod-actions"><button class="icon-button" data-action="up" aria-label="Move up" ${index === 0 || state.demo ? 'disabled' : ''}>↑</button><button class="icon-button" data-action="down" aria-label="Move down" ${index === state.mods.length - 1 || state.demo ? 'disabled' : ''}>↓</button><button class="icon-button remove" data-action="remove" aria-label="Remove mod" ${state.demo ? 'disabled' : ''}>×</button></div></li>`;
+    }).join('');
     ui.empty.hidden = state.mods.length > 0;
   }
 
@@ -342,8 +359,8 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
       tool: t('reportName'),
       generatedAt: new Date().toISOString(),
       notice: t('reportWarning'),
-      loadOrderTopToBottom: state.mods.map((mod, index) => ({ position: index + 1, name: mod.name, sourceType: mod.sourceType || 'example', source: mod.filename, archive: mod.filename, fileEntries: mod.paths.length, skippedUnsafePaths: mod.skippedUnsafe, duplicateEntriesWithinArchive: mod.duplicateEntries, duplicateEntriesWithinSource: mod.duplicateEntries })),
-      matchingPaths: overlaps.map(({ key, hits }) => ({ path: hits[0].entry.display, normalizedPath: key, archives: hits.map(({ mod, modIndex, entry }) => ({ name: mod.name, sourceType: mod.sourceType || 'example', source: mod.filename, archive: mod.filename, position: modIndex + 1, sizeBytes: entry.size })) })),
+      loadOrderTopToBottom: state.mods.map((mod, index) => ({ position: index + 1, name: mod.name, sourceType: mod.sourceType || 'example', source: mod.filename, archive: mod.filename, fileEntries: mod.paths.length, skippedUnsafePaths: mod.skippedUnsafe, duplicateEntriesWithinArchive: mod.duplicateEntries, duplicateEntriesWithinSource: mod.duplicateEntries, wrapper: mod.wrapper ?? null, warnings: mod.warnings || (mod.warning ? [{ code: mod.warning, params: {} }] : []) })),
+      matchingPaths: overlaps.map(({ key, hits }) => ({ path: hits[0].entry.display, normalizedPath: key, archives: hits.map(({ mod, modIndex, entry }) => ({ name: mod.name, sourceType: mod.sourceType || 'example', source: mod.filename, archive: mod.filename, position: modIndex + 1, sizeBytes: entry.size, wrapper: mod.wrapper ?? null, warnings: mod.warnings || (mod.warning ? [{ code: mod.warning, params: {} }] : []) })) })),
       limitations: t('reportWarning')
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json;charset=utf-8' }));

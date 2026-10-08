@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2 - 2026-10-08
+
+- Preserve game paths when a ZIP wrapper is ambiguous instead of silently dropping entries.
+- Show localized ZIP layout warnings in the app and include wrapper metadata in JSON reports.
+- Count unsafe ZIP paths once across directory parsing and normalization.
+
 ## 0.3.1 - 2026-10-08
 
 - Exclude Workshop thumbnail and preview files at any folder depth in both ZIP and folder scans.
