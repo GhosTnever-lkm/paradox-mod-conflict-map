@@ -1,4 +1,4 @@
-import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, normalizeFolderEntries, normalizeSelectedFolder } from './conflict-core.mjs';
+import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, normalizeFolderEntries, normalizeSelectedFolder, normalizeZipEntries } from './conflict-core.mjs';
 
 (() => {
   'use strict';
@@ -19,7 +19,7 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
       heroText: 'Сравни ZIP-архивы или папки модов Paradox по внутренним путям. Переставляй порядок, чтобы увидеть потенциальные пересечения файлов.',
       step1: '01 / Добавь ZIP или папку', step2: '02 / Расставь порядок', step3: '03 / Изучи пересечения',
       toolLabel: 'КАРТА ПЕРЕСЕЧЕНИЙ', toolTitle: 'Добавь ZIP или папки модов', demo: 'Загрузить пример', addZips: 'Выбрать ZIP', addFolder: 'Выбрать папку',
-      folderHint: 'Выбирай папку одного мода: ту, где лежат common, events, history и descriptor.mod.',
+      folderHint: 'Можно выбрать папку мода или несколько модов. Без descriptor.mod приложение использует выбранную папку целиком.',
       workspaceHint: 'Порядок сверху вниз: нижние моды условно перекрывают файлы верхних, если игра обрабатывает одинаковые пути по этому правилу.',
       orderLabel: 'ПОРЯДОК МОДОВ', orderTitle: 'Моды и порядок', clear: 'Очистить', dropTitle: 'Перетащи сюда ZIP-архивы', dropSub: 'ZIP или папку можно выбрать кнопками выше',
       empty: 'Добавь хотя бы два мода, чтобы увидеть общие пути.', first: 'выше в выбранном порядке', last: 'ниже в выбранном порядке', reportLabel: 'ОТЧЁТ', reportTitle: 'Пересечения файлов', export: 'Экспорт JSON',
@@ -32,7 +32,7 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
       card2Title: 'Порядок важен', card2: 'Отчёт показывает выбранный порядок и последний архив в списке. Фактические правила игры могут отличаться.',
       card3Title: 'Содержимое не читается', card3: 'Приложение использует пути из ZIP или выбранной папки. Оно не проверяет код, семантику файлов, зависимости и ошибки игры.',
       privacyTitle: 'Файлы остаются на твоём устройстве', privacyText: 'Для папок приложение читает только относительные пути и размеры выбранных файлов; из ZIP — центральный каталог. Содержимое файлов не отправляется на сервер, сами архивы не распаковываются.',
-      footer: 'Открытый код · MIT · локальная обработка', invalidZip: 'Похоже, это не ZIP-архив или в нём повреждён центральный каталог.', invalidFolder: 'Не удалось получить список файлов выбранной папки. Выбери папку одного мода.', multipleMods: 'В выбранной папке найдено несколько модов. Каждый вложенный мод добавлен отдельно.', tooLarge: 'ZIP-архив превышает лимит 500 МБ.', expandedFileTooLarge: 'Файл внутри источника превышает лимит 1 ГБ.', expandedTotalTooLarge: 'Распакованный объём превышает лимит 4 ГБ.', tooMany: 'В ZIP или папке слишком много файлов для безопасного просмотра.', duplicateCount: 'дубликатов',
+      footer: 'Открытый код · MIT · локальная обработка', invalidZip: 'Похоже, это не ZIP-архив или в нём повреждён центральный каталог.', invalidFolder: 'В выбранной папке не найдено файлов. Выбери папку мода с содержимым.', multipleMods: 'Добавлено несколько модов из выбранной папки.', noDescriptor: 'descriptor.mod не найден: папка добавлена целиком. Старый формат .mod рядом с папкой тоже поддерживается.', nestedDescriptor: 'Внутри выбранной папки найден descriptor.mod, но есть и файлы снаружи. Добавлена вся папка, чтобы не потерять содержимое.', emptyZip: 'Архив прочитан, но игровые файлы не найдены. descriptor.mod и служебные файлы исключены.', unsafeOnly: 'В архиве найдены только небезопасные пути; они исключены и не сравниваются.', skippedServices: 'служебных файлов исключено', tooLarge: 'ZIP-архив превышает лимит 500 МБ.', expandedFileTooLarge: 'Файл внутри источника превышает лимит 1 ГБ.', expandedTotalTooLarge: 'Распакованный объём превышает лимит 4 ГБ.', tooMany: 'В ZIP или папке слишком много файлов для безопасного просмотра.', duplicateCount: 'дубликатов',
       badDirectory: 'Некорректный каталог ZIP.', zip64Overflow: 'ZIP64 содержит размер, который браузер не может безопасно обработать.', invalidPath: 'В архиве есть путь за пределами корня или абсолютный путь. Он исключён из карты.',
       duplicateInternal: 'В одном моде повторяется путь файла; отображается один путь, но число повторов показано отдельно.', unsupported: 'Метод сжатия в этой проверке не влияет на чтение путей.',
       countNote: 'учитываются только игровые файлы; descriptor.mod исключён.', demoModA: 'Northern Lights Overhaul', demoModB: 'UI Rebalance Patch', demoModC: 'Community Fix Pack',
@@ -45,7 +45,7 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
       heroText: 'Compare Paradox mod ZIP archives or folders by internal file paths. Reorder them to inspect potential overlaps.',
       step1: '01 / Add ZIP or folder', step2: '02 / Set your order', step3: '03 / Review overlaps',
       toolLabel: 'OVERLAP MAP', toolTitle: 'Add ZIPs or mod folders', demo: 'Load example', addZips: 'Choose ZIPs', addFolder: 'Choose folder',
-      folderHint: 'Choose one mod folder: the directory containing common, events, history, and descriptor.mod.',
+      folderHint: 'Choose one mod folder or a collection. Without descriptor.mod, the selected folder is used as-is.',
       workspaceHint: 'Order runs top to bottom. Lower items may override matching paths above them if the game applies that rule.',
       orderLabel: 'MOD ORDER', orderTitle: 'Mods and order', clear: 'Clear', dropTitle: 'Drop ZIP archives here', dropSub: 'Use the buttons above to choose ZIPs or a folder',
       empty: 'Add at least two mods to find shared paths.', first: 'higher in selected order', last: 'lower in selected order', reportLabel: 'REPORT', reportTitle: 'File overlaps', export: 'Export JSON',
@@ -58,7 +58,7 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
       card2Title: 'Order matters', card2: 'The report shows your selected order and the last archive in the list. Actual game rules may differ.',
       card3Title: 'No contents are parsed', card3: 'The app uses paths from ZIPs or the selected folder. It does not inspect code, file semantics, dependencies, or in-game errors.',
       privacyTitle: 'Your files stay on your device', privacyText: 'For folders, the app reads only selected file paths and sizes; for ZIPs, only the central directory. It never uploads file contents or extracts archives.',
-      footer: 'Open source · MIT · processed locally', invalidZip: 'This does not look like a ZIP archive or its central directory is damaged.', invalidFolder: 'Could not read the selected folder file list. Choose one mod folder.', multipleMods: 'Multiple mods were found in the selected folder. Each nested mod was added separately.', tooLarge: 'ZIP archive exceeds the 500 MB limit.', expandedFileTooLarge: 'A file inside the source exceeds the 1 GB limit.', expandedTotalTooLarge: 'Expanded content exceeds the 4 GB limit.', tooMany: 'ZIP or folder has too many files to inspect safely.', duplicateCount: 'duplicates',
+      footer: 'Open source · MIT · processed locally', invalidZip: 'This does not look like a ZIP archive or its central directory is damaged.', invalidFolder: 'No files were found in the selected folder. Choose a mod folder with content.', multipleMods: 'Multiple mods were added from the selected folder.', noDescriptor: 'descriptor.mod was not found: the selected folder was added as-is. Legacy .mod files beside the folder are supported too.', nestedDescriptor: 'A nested descriptor.mod was found alongside files outside it. The whole selected folder was added to avoid dropping content.', emptyZip: 'The archive was read, but no game files were found. descriptor.mod and service files are excluded.', unsafeOnly: 'Only unsafe paths were found in this archive; they were excluded from comparison.', skippedServices: 'service files excluded', tooLarge: 'ZIP archive exceeds the 500 MB limit.', expandedFileTooLarge: 'A file inside the source exceeds the 1 GB limit.', expandedTotalTooLarge: 'Expanded content exceeds the 4 GB limit.', tooMany: 'ZIP or folder has too many files to inspect safely.', duplicateCount: 'duplicates',
       badDirectory: 'Invalid ZIP central directory.', zip64Overflow: 'ZIP64 contains a size the browser cannot process safely.', invalidPath: 'Archive contains an absolute or out-of-root path. It was excluded from the map.',
       duplicateInternal: 'A file path repeats within one archive; one path is shown, while entry counts remain separate.', unsupported: 'Compression method does not affect path reading in this inspection.',
       countNote: 'only game files are counted; descriptor.mod is excluded.', demoModA: 'Northern Lights Overhaul', demoModB: 'UI Rebalance Patch', demoModC: 'Community Fix Pack',
@@ -147,6 +147,8 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
     let expandedTotal = 0;
     let skippedUnsafe = 0;
     let duplicateEntries = 0;
+    let skippedService = 0;
+    const rawPaths = [];
     const seenInArchive = new Set();
     for (let index = 0; index < entries; index++) {
       if (offset + 46 > directory.length || view.getUint32(offset, true) !== 0x02014b50) throw new Error(t('badDirectory'));
@@ -191,17 +193,17 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
       if (name.endsWith('/') || name.endsWith('\u0000')) continue;
       const lower = name.toLowerCase();
       const unsafe = name.startsWith('/') || /^[a-z]:\//i.test(name) || name.split('/').includes('..') || name.includes('\u0000');
-      if (unsafe) { skippedUnsafe++; continue; }
-      if (lower.split('/').pop() === 'descriptor.mod') continue;
+      if (unsafe) { skippedUnsafe++; rawPaths.push({ key: lower, display: name, unsafe: true }); continue; }
       if (expanded > 1024 * 1024 * 1024) throw new Error(t('expandedFileTooLarge'));
       if (expandedTotal + expanded > MAX_TOTAL_EXPANDED) throw new Error(t('expandedTotalTooLarge'));
       expandedTotal += expanded;
       if (seenInArchive.has(lower)) duplicateEntries++;
-      else { seenInArchive.add(lower); paths.push({ key: lower, display: name, size: expanded, compressed, method: view.getUint16(offset - (46 + nameLength + extraLength + commentLength) + 10, true), encrypted: Boolean(flags & 1) }); }
+      else { seenInArchive.add(lower); rawPaths.push({ key: lower, display: name, unsafe: false, size: expanded, compressed, method: view.getUint16(offset - (46 + nameLength + extraLength + commentLength) + 10, true), encrypted: Boolean(flags & 1) }); }
     }
     if (offset !== directory.length) throw new Error(t('badDirectory'));
     // A structurally valid archive may contain only descriptor metadata or unsafe entries.
-    return { paths, skippedUnsafe, duplicateEntries, expandedTotal, fileSize: file.size };
+    const normalized = normalizeZipEntries(rawPaths);
+    return { paths: normalized.paths, skippedUnsafe: skippedUnsafe + normalized.skippedUnsafe, duplicateEntries: duplicateEntries + normalized.duplicateEntries, skippedService: normalized.skippedService, expandedTotal, fileSize: file.size };
   }
 
   function safeModName(name) { return String(name).replace(/\.zip$/i, '').replace(/[<>"'&]/g, '').slice(0, 90) || 'Mod'; }
@@ -220,13 +222,13 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
       if (expandedTotal + file.size > MAX_TOTAL_EXPANDED) throw new Error(t('expandedTotalTooLarge'));
       expandedTotal += file.size;
     }
-    const { paths, skippedUnsafe, duplicateEntries } = normalizeFolderEntries(group.entries, group.modRoot);
-    if (!paths.length && !skippedUnsafe) throw new Error(t('invalidFolder'));
+    const { paths, skippedUnsafe, duplicateEntries, skippedService } = normalizeFolderEntries(group.entries, group.modRoot);
+    if (!paths.length) throw new Error(t('invalidFolder'));
     const modLabel = group.modRoot ? `${group.root}/${group.modRoot}` : group.root;
     return {
       id: makeId(), name: safeModName(group.modRoot ? group.modRoot.split('/').at(-1) : group.root),
       filename: modLabel, sourceType: 'folder', sourceKey: `folder:${modLabel.toLowerCase()}:${group.entries.length}:${expandedTotal}`,
-      paths, skippedUnsafe, duplicateEntries, expandedTotal, fileSize: expandedTotal
+      paths, skippedUnsafe, duplicateEntries, skippedService, warning: group.warning, expandedTotal, fileSize: expandedTotal
     };
   }
 
@@ -239,6 +241,12 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
       if (state.mods.some((mod) => mod.sourceKey === sourceKey)) continue;
       try {
         const parsed = await readDirectory(file);
+        if (!parsed.paths.length) {
+      const reason = parsed.skippedUnsafe ? t('unsafeOnly') : t('emptyZip');
+          ui.error.textContent = `${file.name}: ${reason}`;
+          ui.error.hidden = false;
+          continue;
+        }
         state.mods.push({ id: makeId(), name: safeModName(file.name), filename: file.name, sourceType: 'zip', sourceKey, file, ...parsed });
       } catch (error) {
         ui.error.textContent = `${file.name}: ${error.message || t('readFailed')}`;
@@ -256,16 +264,21 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
     if (files.length > MAX_ENTRIES) { ui.error.textContent = t('tooMany'); ui.error.hidden = false; return; }
     const groups = normalizeSelectedFolder(files);
     if (!groups.length) { ui.error.textContent = t('invalidFolder'); ui.error.hidden = false; return; }
-    if (groups.length > 1) { ui.error.textContent = t('multipleMods'); ui.error.hidden = false; }
+    const warnings = [];
+    const errors = [];
+    if (groups.length > 1) warnings.push(t('multipleMods'));
     for (const group of groups) {
       try {
         const parsed = parseFolderGroup(group);
         if (!state.mods.some((mod) => mod.sourceKey === parsed.sourceKey)) state.mods.push(parsed);
+        if (parsed.warning && !warnings.includes(t(parsed.warning))) warnings.push(t(parsed.warning));
       } catch (error) {
-        ui.error.textContent = `${group.root}${group.modRoot ? `/${group.modRoot}` : ''}: ${error.message || t('invalidFolder')}`;
-        ui.error.hidden = false;
+        errors.push(`${group.root}${group.modRoot ? `/${group.modRoot}` : ''}: ${error.message || t('invalidFolder')}`);
       }
     }
+    if (errors.length || warnings.length) { ui.error.textContent = [...errors, ...warnings].join(' '); ui.error.hidden = false; }
+    ui.error.classList.toggle('notice', !errors.length && warnings.length > 0);
+    ui.error.setAttribute('role', errors.length ? 'alert' : 'status');
     state.demo = false;
     render();
   }
@@ -304,7 +317,7 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
   }
 
   function renderMods() {
-    ui.mods.innerHTML = state.mods.map((mod, index) => `<li class="mod" draggable="${!state.demo}" data-id="${esc(mod.id)}"><span class="mod-index">${String(index + 1).padStart(2, '0')}</span><div class="mod-info"><input aria-label="Mod name" maxlength="90" value="${esc(mod.name)}" ${state.demo ? 'readonly' : ''}><small>${esc(t(mod.sourceType === 'folder' ? 'folderSource' : 'zipSource'))}: ${esc(mod.filename)} · ${mod.paths.length} ${esc(t('summaryFiles'))}${mod.duplicateEntries ? ` · ${mod.duplicateEntries} ${esc(t('duplicateCount'))}` : ''}${mod.skippedUnsafe ? ` · ⚠ ${mod.skippedUnsafe}` : ''}</small></div><div class="mod-actions"><button class="icon-button" data-action="up" aria-label="Move up" ${index === 0 || state.demo ? 'disabled' : ''}>↑</button><button class="icon-button" data-action="down" aria-label="Move down" ${index === state.mods.length - 1 || state.demo ? 'disabled' : ''}>↓</button><button class="icon-button remove" data-action="remove" aria-label="Remove mod" ${state.demo ? 'disabled' : ''}>×</button></div></li>`).join('');
+    ui.mods.innerHTML = state.mods.map((mod, index) => `<li class="mod" draggable="${!state.demo}" data-id="${esc(mod.id)}"><span class="mod-index">${String(index + 1).padStart(2, '0')}</span><div class="mod-info"><input aria-label="Mod name" maxlength="90" value="${esc(mod.name)}" ${state.demo ? 'readonly' : ''}><small>${esc(t(mod.sourceType === 'folder' ? 'folderSource' : 'zipSource'))}: ${esc(mod.filename)} · ${mod.paths.length} ${esc(t('summaryFiles'))}${mod.duplicateEntries ? ` · ${mod.duplicateEntries} ${esc(t('duplicateCount'))}` : ''}${mod.skippedUnsafe ? ` · ⚠ ${mod.skippedUnsafe}` : ''}${mod.skippedService ? ` · ${mod.skippedService} ${esc(t('skippedServices'))}` : ''}</small></div><div class="mod-actions"><button class="icon-button" data-action="up" aria-label="Move up" ${index === 0 || state.demo ? 'disabled' : ''}>↑</button><button class="icon-button" data-action="down" aria-label="Move down" ${index === state.mods.length - 1 || state.demo ? 'disabled' : ''}>↓</button><button class="icon-button remove" data-action="remove" aria-label="Remove mod" ${state.demo ? 'disabled' : ''}>×</button></div></li>`).join('');
     ui.empty.hidden = state.mods.length > 0;
   }
 

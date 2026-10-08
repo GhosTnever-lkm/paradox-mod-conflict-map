@@ -1,44 +1,45 @@
 # Mod Conflict Map
 
-**A free, local-first path overlap map for Paradox mods.** Compare ZIP archives or selected mod folders, set the order you want to review, and find files that appear under the same relative path.
+**A free, local-first path overlap map for Paradox mods.** Compare ZIP archives or selected mod folders, set the order you want to review, and find game files that appear under the same relative path.
 
 [Open the live app](https://ghostnever-lkm.github.io/paradox-mod-conflict-map/) · [Download the latest ZIP](https://github.com/GhosTnever-lkm/paradox-mod-conflict-map/releases/latest/download/Mod-Conflict-Map.zip) · [Report an issue](https://github.com/GhosTnever-lkm/paradox-mod-conflict-map/issues)
 
-Current unreleased changes are tracked in [CHANGELOG.md](CHANGELOG.md).
+Current changes are tracked in [CHANGELOG.md](CHANGELOG.md).
 
 ## Quick start
 
-1. Open the [live app](https://ghostnever-lkm.github.io/paradox-mod-conflict-map/) or download `index.html`, `styles.css`, and `app.js` from this repository.
-2. Add ZIP archives or choose the folder of one installed mod. For a folder, select the mod root containing paths such as `common`, `events`, `history`, and `descriptor.mod`. You can also load the built-in example.
-3. Rename entries if needed and arrange them from higher to lower priority with the arrows or by dragging.
-4. Expand matching paths to see which archives contain them. Export a JSON report for later review.
+1. Use the [live app](https://ghostnever-lkm.github.io/paradox-mod-conflict-map/) or download the complete [release ZIP](https://github.com/GhosTnever-lkm/paradox-mod-conflict-map/releases/latest/download/Mod-Conflict-Map.zip). Keep `index.html`, `styles.css`, `app.js`, and `conflict-core.mjs` together; the app imports the core module.
+2. For a local copy, serve that folder over localhost (for example, `python -m http.server 8000`) and open `http://localhost:8000`. Opening `index.html` directly with `file://` may be blocked because browsers restrict JavaScript modules from local files.
+3. Add ZIP archives or choose a mod folder. Folder selection can include several mods; if `descriptor.mod` is absent, the selected folder is analyzed as-is. The legacy `foo.mod` plus `foo/` layout is recognized and normalized to the mod folder.
+4. Rename entries if needed and arrange them from higher to lower priority with the arrows or by dragging.
+5. Expand matching paths to see which archives contain them. Export a JSON report for later review.
 
 ### How the analysis works
 
 ```mermaid
 flowchart LR
     A[Mod ZIP archives or selected folders] --> B[Read ZIP directories or browser file paths]
-    B --> C[Normalize and validate relative paths]
-    C --> D[Group matching relative paths]
+    B --> C[Normalize wrapper roots and validate relative paths]
+    C --> D[Exclude known service files and group matching game paths]
     D --> E[Review using your chosen order]
     E --> F[Export a JSON report]
 ```
 
-The selected order is for review only. It does not configure the launcher or claim to reproduce the game's actual override behavior.
-The app does not change your launcher, mod files, or load order. It does not install, extract, or modify archives. Folder selection is read-only and stays in your browser session.
+The selected order is for review only. It does not configure the launcher or claim to reproduce the game's actual override behavior. The app does not change your launcher or mod files, install software, or extract archives.
 
 ## What it checks
 
-- Lists file paths from each ZIP central directory, including ZIP64 archives when their metadata can be represented safely by the browser, or from folders you explicitly select.
-- Normalizes path separators and letter case to find common paths across archives.
-- Shows the chosen review order and the last archive in that list for each shared path.
-- Skips `descriptor.mod` metadata files and flags absolute or out-of-root paths instead of including them in the overlap map.
+- Lists entries from ZIP central directories (including safely representable ZIP64 metadata) or folders explicitly selected by you.
+- Normalizes path separators, letter case, and a detected common ZIP wrapper such as `ModA/`, so wrapped archives compare by their game-relative paths.
+- Removes one wrapper identified by a single `descriptor.mod`. Without one, a shared top-level folder is removed only when it clearly encloses recognized game directories.
+- Excludes known service files from comparisons: VCS directories (`.git`, `.svn`, `.hg`), common OS metadata, root README/license/changelog files, root `.mod` descriptors, and common Workshop thumbnail/preview images. The source row reports how many service files were skipped.
+- Skips `descriptor.mod` and `.mod` metadata and flags absolute or out-of-root paths instead of including them in the map. The legacy sibling `.mod` plus content folder layout is normalized to its content root.
 - Reports duplicate paths within a ZIP or selected folder in both the source list and exported JSON.
-- If the selected folder contains nested mod roots marked by `descriptor.mod`, each root is added as a separate source and paths are normalized from that mod root. This avoids comparing wrapper names as part of the game path.
+- Adds several nested mods as separate sources. If nested descriptors coexist with files outside them, it keeps the entire selected folder and shows a warning to avoid silently losing files.
 
 ## Read the result carefully
 
-A shared path is a **potential file overlap**, not proof that two mods conflict. The application does not inspect file contents, understand Clausewitz data, resolve `replace_path`, evaluate dependencies, determine the active launcher playset, or reproduce a game's merge and override rules. The order is the order you provide for review; verify actual priority behavior for your game and launcher.
+A shared path is a **potential file overlap**, not proof that two mods conflict. The app does not inspect file contents, understand Clausewitz data, resolve `replace_path`, evaluate dependencies, determine the active launcher playset, or reproduce a game's merge and override rules. The order is the order you provide for review; verify actual priority behavior for your game and launcher.
 
 It is not antivirus software, a malware scanner, a full mod validator, or a guarantee that an archive is safe. It does not decompress files or verify CRC values. Do not use its report as proof that an archive is trustworthy.
 
@@ -46,14 +47,14 @@ It is not antivirus software, a malware scanner, a full mod validator, or a guar
 
 - Maximum compressed archive size: 500 MB each.
 - Maximum file entries: 100,000 per archive or selected folder.
-- Maximum expanded file size: 1 GB per file and 4 GB total per archive or selected folder. These limits are reported separately from the compressed archive size limit.
+- Maximum expanded file size: 1 GB per file and 4 GB total per archive or selected folder. These limits are reported separately from compressed archive size.
 - For ZIPs, the app reads only the central directory. For folders, it reads relative paths and file sizes supplied by the browser. It does not upload files, make network requests, load external scripts, or extract archive contents.
 
-These limits keep metadata scans bounded. Very large or malformed archives may be rejected. The browser must have enough memory to read the selected ZIP's central directory.
+These limits keep metadata scans bounded. Very large or malformed archives may be rejected. The browser must have enough memory to read a selected ZIP's central directory.
 
 ## Development
 
-No dependencies or build step are required. Open `index.html` or serve the repository as static files. The app uses plain HTML, CSS, and JavaScript. Run the pure logic regression tests with `node --test`.
+No dependencies or build step are required. Serve the repository as static files over localhost; module imports may be blocked by `file://`. Run the regression suite with `node --test`.
 
 ## License
 
@@ -61,4 +62,4 @@ MIT. See [LICENSE](LICENSE).
 
 ## Support
 
-This project is free and open source. Optional support: [Buy Me a Coffee](https://buymeacoffee.com/azizazimov8) · [Boosty](https://boosty.to/azizazimov) · [Gumroad](https://azimovian22.gumroad.com/).
+This project is free and open source. Optional support: [Buy Me a Coffee](https://buymeacoffee.com/azizazimov8) · [Boosty](https://boosty.to/azimovian) · [Gumroad](https://azimovian22.gumroad.com/).
