@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { collectOverlaps, findEndRecord, normalizeFolderEntries, normalizeSelectedFolder, normalizeZipEntries } from '../conflict-core.mjs';
+import { collectOverlaps, filterOverlaps, findEndRecord, normalizeFolderEntries, normalizeSelectedFolder, normalizeZipEntries } from '../conflict-core.mjs';
 
 const file = (relative, size = 1) => ({ name: relative.split('/').at(-1), size, webkitRelativePath: relative });
 const entry = (display, size = 1) => ({ key: display.toLowerCase(), display, size, compressed: size, method: 0, encrypted: false });
@@ -117,6 +117,20 @@ test('unsafe paths are counted, excluded, and cannot create a valid empty folder
 
 test('descriptor-only archive has no game paths', () => {
   assert.equal(normalizeZipEntries([entry('Mod/descriptor.mod')]).paths.length, 0);
+});
+
+test('overlap search matches paths and source names without changing the source list', () => {
+  const mods = [
+    { name: 'Northern Lights', filename: 'winter.zip', paths: normalizeZipEntries([entry('Mod/common/ideas/weather.txt'), entry('Mod/common/ideas/color.txt')]).paths },
+    { name: 'Balance Patch', filename: 'balance.zip', paths: normalizeZipEntries([entry('Other/common/ideas/weather.txt')]).paths }
+  ];
+  const overlaps = collectOverlaps(mods);
+  assert.equal(filterOverlaps(overlaps, 'WEATHER').length, 1);
+  assert.equal(filterOverlaps(overlaps, 'balance').length, 1);
+  assert.equal(filterOverlaps(overlaps, 'winter.zip').length, 1);
+  assert.equal(filterOverlaps(overlaps, 'missing').length, 0);
+  assert.equal(filterOverlaps(overlaps, '  ').length, overlaps.length);
+  assert.equal(overlaps.length, 1);
 });
 
 test('EOCD accepts trailing bytes after its declared comment', () => {

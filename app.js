@@ -1,4 +1,4 @@
-import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, normalizeFolderEntries, normalizeSelectedFolder, normalizeZipEntries } from './conflict-core.mjs';
+import { collectOverlaps as groupOverlaps, filterOverlaps, findEndRecord as locateEndRecord, normalizeFolderEntries, normalizeSelectedFolder, normalizeZipEntries } from './conflict-core.mjs';
 
 (() => {
   'use strict';
@@ -10,7 +10,7 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
   const $ = (id) => document.getElementById(id);
   const ui = {
     language: $('language'), input: $('zip-input'), folderInput: $('folder-input'), folderButton: $('folder-button'), dropzone: $('dropzone'), mods: $('mods'), empty: $('empty'),
-    conflicts: $('conflicts'), summary: $('summary'), error: $('error'), export: $('export'), demo: $('demo'), clear: $('clear')
+    conflicts: $('conflicts'), conflictTools: $('conflict-tools'), conflictSearch: $('conflict-search'), conflictCount: $('conflict-count'), summary: $('summary'), error: $('error'), export: $('export'), demo: $('demo'), clear: $('clear')
   };
 
   const copy = {
@@ -24,7 +24,7 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
       orderLabel: 'ПОРЯДОК МОДОВ', orderTitle: 'Моды и порядок', clear: 'Очистить', dropTitle: 'Перетащи сюда ZIP-архивы', dropSub: 'ZIP или папку можно выбрать кнопками выше',
       empty: 'Добавь хотя бы два мода, чтобы увидеть общие пути.', first: 'выше в выбранном порядке', last: 'ниже в выбранном порядке', reportLabel: 'ОТЧЁТ', reportTitle: 'Пересечения файлов', export: 'Экспорт JSON',
       summaryEmpty: 'Результат появится после добавления двух или более модов.', summaryMods: 'мода', summaryPaths: 'общих путей', summaryFiles: 'файловых записей', noOverlap: 'Одинаковых игровых путей не найдено в выбранных модах.',
-      pathHits: 'мода', earlier: 'выше в выбранном порядке', later: 'ниже в выбранном порядке', lastMod: 'ниже в списке · возможное перекрытие',
+      pathHits: 'мода', searchLabel: 'Поиск по пути или моду', searchPlaceholder: 'Например, common/ideas или название мода', searchCount: 'Показано {shown} из {total} путей', noSearchResult: 'По запросу совпадающих путей не найдено.', earlier: 'выше в выбранном порядке', later: 'ниже в выбранном порядке', lastMod: 'ниже в списке · возможное перекрытие',
       cautious: 'Совпадение пути не доказывает несовместимость. Это только сигнал для ручной проверки.',
       howLabel: 'КАК ЧИТАТЬ РЕЗУЛЬТАТ', howTitle: 'Пересечение — повод<br><em>проверить, а не паниковать.</em>',
       howText: 'Одинаковый относительный путь означает, что несколько модов содержат файл по одному адресу. Это может быть намеренная замена, патч или простое совпадение; само по себе это не доказывает несовместимость.',
@@ -53,7 +53,7 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
       orderLabel: 'MOD ORDER', orderTitle: 'Mods and order', clear: 'Clear', dropTitle: 'Drop ZIP archives here', dropSub: 'Use the buttons above to choose ZIPs or a folder',
       empty: 'Add at least two mods to find shared paths.', first: 'higher in selected order', last: 'lower in selected order', reportLabel: 'REPORT', reportTitle: 'File overlaps', export: 'Export JSON',
       summaryEmpty: 'Results appear after you add two or more mods.', summaryMods: 'mods', summaryPaths: 'shared paths', summaryFiles: 'file entries', noOverlap: 'No identical game paths were found in the selected mods.',
-      pathHits: 'mods', earlier: 'higher in selected order', later: 'lower in selected order', lastMod: 'lower in the list · possible overlap',
+      pathHits: 'mods', searchLabel: 'Search paths or mods', searchPlaceholder: 'For example, common/ideas or a mod name', searchCount: 'Showing {shown} of {total} paths', noSearchResult: 'No matching paths for this search.', earlier: 'higher in selected order', later: 'lower in selected order', lastMod: 'lower in the list · possible overlap',
       cautious: 'A matching path does not prove incompatibility. It is only a signal for manual review.',
       howLabel: 'READING THE RESULT', howTitle: 'An overlap means<br><em>review it, not panic.</em>',
       howText: 'The same relative path means multiple mods contain a file at the same address. That may be an intentional override, a patch, or a coincidence; by itself, it does not prove incompatibility.',
@@ -86,6 +86,7 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
       if (element.tagName === 'H1' || ['heroTitle', 'howTitle'].includes(element.dataset.i18n)) element.innerHTML = value;
       else element.textContent = value;
     });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach((element) => { element.placeholder = t(element.dataset.i18nPlaceholder); });
     ui.language.textContent = locale === 'ru' ? 'EN' : 'RU';
     ui.dropzone.querySelector('strong').textContent = t('dropTitle');
     ui.dropzone.querySelector('span:not(.upload)').textContent = t('dropSub');
@@ -317,9 +318,13 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
   }
 
   function renderConflicts(overlaps) {
+    ui.conflictTools.hidden = state.mods.length < 2 || overlaps.length === 0;
     if (state.mods.length < 2) { ui.conflicts.innerHTML = ''; return; }
-    if (!overlaps.length) { ui.conflicts.innerHTML = `<div class="empty-state">${esc(t('noOverlap'))}</div>`; return; }
-    ui.conflicts.innerHTML = overlaps.map((overlap) => {
+    if (!overlaps.length) { ui.conflictCount.textContent = ''; ui.conflicts.innerHTML = `<div class="empty-state">${esc(t('noOverlap'))}</div>`; return; }
+    const matches = filterOverlaps(overlaps, ui.conflictSearch.value);
+    ui.conflictCount.textContent = formatMessage('searchCount', { shown: matches.length, total: overlaps.length });
+    if (!matches.length) { ui.conflicts.innerHTML = `<div class="empty-state">${esc(t('noSearchResult'))}</div>`; return; }
+    ui.conflicts.innerHTML = matches.map((overlap) => {
       const lastIndex = overlap.hits.at(-1).modIndex;
       const items = overlap.hits.map(({ modIndex, mod, entry }) => `<div class="source-row ${modIndex === lastIndex ? 'winner' : ''}"><span>${esc(mod.name)}${modIndex === lastIndex ? ` · ${esc(t('lastMod'))}` : ''}</span><small>${fmtBytes(entry.size)}</small></div>`).join('');
       return `<details class="conflict"><summary><span class="path-icon">⌁</span><span class="path-name">${esc(overlap.hits[0].entry.display)}</span><span class="hit-count">${overlap.hits.length} ${esc(t('pathHits'))}</span></summary><div class="conflict-body">${items}<p class="note">${esc(t('cautious'))}</p></div></details>`;
@@ -396,8 +401,9 @@ import { collectOverlaps as groupOverlaps, findEndRecord as locateEndRecord, nor
     });
   });
   ui.demo.addEventListener('click', loadDemo);
-  ui.clear.addEventListener('click', () => { state.mods = []; state.demo = false; ui.error.hidden = true; render(); });
+  ui.clear.addEventListener('click', () => { state.mods = []; state.demo = false; ui.conflictSearch.value = ''; ui.error.hidden = true; render(); });
   ui.export.addEventListener('click', downloadReport);
+  ui.conflictSearch.addEventListener('input', () => renderConflicts(collectOverlaps()));
   ui.language.addEventListener('click', () => setLanguage(state.locale === 'ru' ? 'en' : 'ru'));
   if (!('webkitdirectory' in ui.folderInput)) ui.folderButton.hidden = true;
   ui.dropzone.addEventListener('dragover', (event) => { event.preventDefault(); ui.dropzone.classList.add('drag'); });

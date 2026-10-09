@@ -124,6 +124,19 @@ export function collectOverlaps(mods) {
     .sort((a, b) => b.hits.length - a.hits.length || a.key.localeCompare(b.key));
 }
 
+export function filterOverlaps(overlaps, query) {
+  const needle = String(query ?? '').trim().toLowerCase();
+  if (!needle) return overlaps;
+  return overlaps.filter(({ key, hits }) =>
+    String(key || '').toLowerCase().includes(needle) ||
+    hits.some(({ mod, entry }) =>
+      String(mod.name || '').toLowerCase().includes(needle) ||
+      String(mod.filename || '').toLowerCase().includes(needle) ||
+      String(entry.display || '').toLowerCase().includes(needle)
+    )
+  );
+}
+
 export function normalizeSelectedFolder(fileList) {
   const roots = new Map();
   for (const file of fileList) {

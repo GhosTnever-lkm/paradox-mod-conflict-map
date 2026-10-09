@@ -2,13 +2,13 @@
 
 **A free, local-first path overlap map for Paradox mods.** Compare ZIP archives or selected mod folders, set the order you want to review, and find game files that appear under the same relative path.
 
-[Open the live app](https://ghostnever-lkm.github.io/paradox-mod-conflict-map/) · [Download v0.3.3](https://github.com/GhosTnever-lkm/paradox-mod-conflict-map/releases/download/v0.3.3/Mod-Conflict-Map-v0.3.3.zip) · [Report an issue](https://github.com/GhosTnever-lkm/paradox-mod-conflict-map/issues)
+[Open the live app](https://ghostnever-lkm.github.io/paradox-mod-conflict-map/) · [Download v0.4.0](https://github.com/GhosTnever-lkm/paradox-mod-conflict-map/releases/download/v0.4.0/Mod-Conflict-Map-v0.4.0.zip) · [Report an issue](https://github.com/GhosTnever-lkm/paradox-mod-conflict-map/issues)
 
 Current changes are tracked in [CHANGELOG.md](CHANGELOG.md).
 
 ## Quick start
 
-1. Use the [live app](https://ghostnever-lkm.github.io/paradox-mod-conflict-map/) or download the complete [v0.3.3 release ZIP](https://github.com/GhosTnever-lkm/paradox-mod-conflict-map/releases/download/v0.3.3/Mod-Conflict-Map-v0.3.3.zip). Keep `index.html`, `styles.css`, `app.js`, and `conflict-core.mjs` together; the app imports the core module.
+1. Use the [live app](https://ghostnever-lkm.github.io/paradox-mod-conflict-map/) or download the complete [v0.4.0 release ZIP](https://github.com/GhosTnever-lkm/paradox-mod-conflict-map/releases/download/v0.4.0/Mod-Conflict-Map-v0.4.0.zip). Keep `index.html`, `styles.css`, `app.js`, and `conflict-core.mjs` together; the app imports the core module.
 2. For a local copy, serve that folder over localhost (for example, `python -m http.server 8000`) and open `http://localhost:8000`. Opening `index.html` directly with `file://` may be blocked because browsers restrict JavaScript modules from local files.
 3. Add ZIP archives or choose a mod folder. Folder selection can include several mods; if `descriptor.mod` is absent, the selected folder is analyzed as-is. The legacy `foo.mod` plus `foo/` layout is recognized and normalized to the mod folder.
 4. Rename entries if needed and arrange them from higher to lower priority with the arrows or by dragging.
@@ -35,6 +35,7 @@ The selected order is for review only. It does not configure the launcher or cla
 - Excludes known service files from comparisons: VCS directories (`.git`, `.svn`, `.hg`), common OS metadata, root README/license/changelog files, root `.mod` descriptors, and common Workshop thumbnail/preview images. The source row reports how many service files were skipped.
 - Skips `descriptor.mod` and `.mod` metadata and flags absolute or out-of-root paths instead of including them in the map. The legacy sibling `.mod` plus content folder layout is normalized to its content root.
 - Reports duplicate paths within a ZIP or selected folder in both the source list and exported JSON.
+- Search the overlap list by normalized file path, mod name, or source archive name; the count shows how many results match. Search filters the on-screen list while JSON export still contains every overlap.
 - Adds several nested mods as separate sources. If nested descriptors coexist with files outside them, it keeps the entire selected folder and shows a warning to avoid silently losing files.
 
 ## Read the result carefully

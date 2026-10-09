@@ -5,3 +5,5 @@
 
 .error.notice{background:#202c28;border-color:#536f61;color:#c1f3dc}
 .mod-warning{color:var(--amber)}
+
+.conflict-tools{display:grid;grid-template-columns:auto minmax(140px,1fr) auto;align-items:center;gap:10px;margin:13px 0 8px;color:#9aabb4;font-size:11px}.conflict-tools input{min-width:0;width:100%;border:1px solid #34434d;border-radius:8px;padding:9px 11px;background:#101820;color:var(--text);font:inherit;outline:none}.conflict-tools input:focus{border-color:var(--mint);box-shadow:0 0 0 3px #6ee7bd20}.conflict-tools span{white-space:nowrap;color:var(--mint);font-size:10px}@media(max-width:560px){.conflict-tools{grid-template-columns:1fr auto}.conflict-tools label{grid-column:1/-1}}

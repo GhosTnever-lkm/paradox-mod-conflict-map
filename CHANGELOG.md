@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0 - 2026-10-10
+
+- Add an instant search for matching paths, mod names, and source archive names, with a visible match count.
+- Keep JSON export complete and independent of the current search filter.
+- Add regression coverage for case-insensitive search and source-list preservation.
+
 ## 0.3.3 - 2026-10-10
 
 - Fix the README download links to use the exact versioned release asset name.
