@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3 - 2026-10-10
+
+- Fix the README download links to use the exact versioned release asset name.
+- Add an automated tagged release workflow that runs regression tests and publishes the complete app ZIP with a SHA-256 sidecar.
+- Add a `VERSION` file aligned with the latest release.
+
 ## 0.3.2 - 2026-10-08
 
 - Preserve game paths when a ZIP wrapper is ambiguous instead of silently dropping entries.
