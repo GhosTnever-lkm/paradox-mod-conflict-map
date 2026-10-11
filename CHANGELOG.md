@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1 - 2026-10-12
+
+- Run syntax checks and the regression suite on Node.js 22 and 24 for every push to `main` and pull request.
+- Keep GitHub Actions CI read-only and independent from the tagged release workflow.
+
 ## 0.4.0 - 2026-10-10
 
 - Add an instant search for matching paths, mod names, and source archive names, with a visible match count.

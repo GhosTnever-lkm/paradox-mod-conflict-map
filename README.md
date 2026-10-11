@@ -55,7 +55,7 @@ These limits keep metadata scans bounded. Very large or malformed archives may b
 
 ## Development
 
-No dependencies or build step are required. Serve the repository as static files over localhost; module imports may be blocked by `file://`. Run the regression suite with `node --test`.
+No dependencies or build step are required. Serve the repository as static files over localhost; module imports may be blocked by `file://`. Run the regression suite with `node --test`. GitHub Actions runs syntax checks and the test suite on Node.js 22 and 24 for pushes to `main` and pull requests.
 
 ## License
 
