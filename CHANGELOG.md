@@ -4,6 +4,7 @@
 
 - Run syntax checks and the regression suite on Node.js 22 and 24 for every push to `main` and pull request.
 - Keep GitHub Actions CI read-only and independent from the tagged release workflow.
+- Point the README download links to the published v0.4.1 release.
 
 ## 0.4.0 - 2026-10-10
 
