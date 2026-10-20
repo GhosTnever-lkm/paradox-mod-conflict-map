@@ -123,7 +123,7 @@ import { collectOverlaps as groupOverlaps, filterOverlaps, findEndRecord as loca
     if (file.size < 22) throw new Error(t('invalidZip'));
     const tailStart = Math.max(0, file.size - 65_557);
     const tail = new Uint8Array(await file.slice(tailStart).arrayBuffer());
-    const end = findEndRecord(tail);
+    const end = findEndRecord(tail, tailStart);
     const diskNumber = end.view.getUint16(end.offset + 4, true);
     const directoryDisk = end.view.getUint16(end.offset + 6, true);
     if (diskNumber !== 0 || directoryDisk !== 0) throw new Error(t('invalidZip'));

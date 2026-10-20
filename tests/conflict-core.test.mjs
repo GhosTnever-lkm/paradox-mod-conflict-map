@@ -148,4 +148,23 @@ test('EOCD accepts trailing bytes after its declared comment', () => {
   assert.equal(findEndRecord(bytes).offset, 0);
 });
 
+test('EOCD ignores a trailing empty-record signature when the archive has a central directory', () => {
+  const bytes = new Uint8Array(122);
+  const view = new DataView(bytes.buffer);
+  const directoryOffset = 31;
+  const directorySize = 47;
+  const endOffset = directoryOffset + directorySize;
+  view.setUint32(directoryOffset, 0x02014b50, true);
+  view.setUint16(directoryOffset + 28, 1, true);
+  bytes[directoryOffset + 46] = 120;
+  view.setUint32(endOffset, 0x06054b50, true);
+  view.setUint16(endOffset + 8, 1, true);
+  view.setUint16(endOffset + 10, 1, true);
+  view.setUint32(endOffset + 12, directorySize, true);
+  view.setUint32(endOffset + 16, directoryOffset, true);
+  // This signature is valid-looking but describes an empty ZIP in appended data.
+  view.setUint32(100, 0x06054b50, true);
+  assert.equal(findEndRecord(bytes).offset, endOffset);
+});
+
 test('EOCD rejects an invalid signature', () => assert.throws(() => findEndRecord(new Uint8Array(22)), /invalid ZIP/));

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.3 - 2026-10-20
+
+- Ignore a false ZIP end-record signature appended after an otherwise valid archive, while continuing to accept trailing bytes.
+- Add a regression test for the appended-signature case.
+
 ## 0.4.2 - 2026-10-20
 
 - Keep distinct ZIP archives and selected folders as separate sources even when their names, sizes, and timestamps match; deduplicate only when the selected `File` objects are the same.
