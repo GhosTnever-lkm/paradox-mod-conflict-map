@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.2 - 2026-10-20
+
+- Keep distinct ZIP archives and selected folders as separate sources even when their names, sizes, and timestamps match; deduplicate only when the selected `File` objects are the same.
+- Add regression coverage for identical source metadata.
+
 ## 0.4.1 - 2026-10-12
 
 - Run syntax checks and the regression suite on Node.js 22 and 24 for every push to `main` and pull request.

@@ -137,6 +137,16 @@ export function filterOverlaps(overlaps, query) {
   );
 }
 
+export function sameSourceFiles(existingFiles, candidateFiles) {
+  if (!Array.isArray(existingFiles) || !Array.isArray(candidateFiles) || existingFiles.length !== candidateFiles.length) return false;
+  const remaining = new Set(existingFiles);
+  if (remaining.size !== existingFiles.length) return false;
+  for (const file of candidateFiles) {
+    if (!remaining.delete(file)) return false;
+  }
+  return remaining.size === 0;
+}
+
 export function normalizeSelectedFolder(fileList) {
   const roots = new Map();
   for (const file of fileList) {

@@ -1,4 +1,4 @@
-import { collectOverlaps as groupOverlaps, filterOverlaps, findEndRecord as locateEndRecord, normalizeFolderEntries, normalizeSelectedFolder, normalizeZipEntries } from './conflict-core.mjs';
+import { collectOverlaps as groupOverlaps, filterOverlaps, findEndRecord as locateEndRecord, normalizeFolderEntries, normalizeSelectedFolder, normalizeZipEntries, sameSourceFiles } from './conflict-core.mjs';
 
 (() => {
   'use strict';
@@ -234,7 +234,7 @@ import { collectOverlaps as groupOverlaps, filterOverlaps, findEndRecord as loca
     const modLabel = group.modRoot ? `${group.root}/${group.modRoot}` : group.root;
     return {
       id: makeId(), name: safeModName(group.modRoot ? group.modRoot.split('/').at(-1) : group.root),
-      filename: modLabel, sourceType: 'folder', sourceKey: `folder:${modLabel.toLowerCase()}:${group.entries.length}:${expandedTotal}`,
+      filename: modLabel, sourceType: 'folder', sourceFiles: group.entries.map(({ file }) => file),
       paths, skippedUnsafe, duplicateEntries, skippedService, warning: group.warning, expandedTotal, fileSize: expandedTotal
     };
   }
@@ -248,8 +248,8 @@ import { collectOverlaps as groupOverlaps, filterOverlaps, findEndRecord as loca
     const warnings = [];
     const errors = [];
     for (const file of files) {
-      const sourceKey = `zip:${file.name.toLowerCase()}:${file.size}:${file.lastModified}`;
-      if (state.mods.some((mod) => mod.sourceKey === sourceKey)) continue;
+      const sourceFiles = [file];
+      if (state.mods.some((mod) => sameSourceFiles(mod.sourceFiles, sourceFiles))) continue;
       try {
         const parsed = await readDirectory(file);
         if (!parsed.paths.length) {
@@ -258,7 +258,7 @@ import { collectOverlaps as groupOverlaps, filterOverlaps, findEndRecord as loca
           warnings.push(...(parsed.warnings || []).map((warning) => `${file.name}: ${formatMessage(warning.code, warning.params)}`));
           continue;
         }
-        state.mods.push({ id: makeId(), name: safeModName(file.name), filename: file.name, sourceType: 'zip', sourceKey, file, ...parsed });
+        state.mods.push({ id: makeId(), name: safeModName(file.name), filename: file.name, sourceType: 'zip', sourceFiles, file, ...parsed });
         warnings.push(...(parsed.warnings || []).map((warning) => `${file.name}: ${formatMessage(warning.code, warning.params)}`));
       } catch (error) {
         errors.push(`${file.name}: ${error.message || t('readFailed')}`);
@@ -289,7 +289,7 @@ import { collectOverlaps as groupOverlaps, filterOverlaps, findEndRecord as loca
     for (const group of groups) {
       try {
         const parsed = parseFolderGroup(group);
-        if (!state.mods.some((mod) => mod.sourceKey === parsed.sourceKey)) state.mods.push(parsed);
+        if (!state.mods.some((mod) => sameSourceFiles(mod.sourceFiles, parsed.sourceFiles))) state.mods.push(parsed);
         if (parsed.warning && !warnings.includes(t(parsed.warning))) warnings.push(t(parsed.warning));
       } catch (error) {
         errors.push(`${group.root}${group.modRoot ? `/${group.modRoot}` : ''}: ${error.message || t('invalidFolder')}`);

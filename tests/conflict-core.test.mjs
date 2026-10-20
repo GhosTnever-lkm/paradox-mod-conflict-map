@@ -1,9 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { collectOverlaps, filterOverlaps, findEndRecord, normalizeFolderEntries, normalizeSelectedFolder, normalizeZipEntries } from '../conflict-core.mjs';
+import { collectOverlaps, filterOverlaps, findEndRecord, normalizeFolderEntries, normalizeSelectedFolder, normalizeZipEntries, sameSourceFiles } from '../conflict-core.mjs';
 
 const file = (relative, size = 1) => ({ name: relative.split('/').at(-1), size, webkitRelativePath: relative });
 const entry = (display, size = 1) => ({ key: display.toLowerCase(), display, size, compressed: size, method: 0, encrypted: false });
+
+test('source deduplication compares selected file objects, not colliding metadata', () => {
+  const first = { name: 'mod.zip', size: 100, lastModified: 1 };
+  const second = { name: 'mod.zip', size: 100, lastModified: 1 };
+  assert.equal(sameSourceFiles([first], [first]), true);
+  assert.equal(sameSourceFiles([first], [second]), false);
+  assert.equal(sameSourceFiles([first, second], [second, first]), true);
+  assert.equal(sameSourceFiles([first, second], [first, first]), false);
+});
 
 test('folder wrappers and nested descriptor roots normalize to relative game paths', () => {
   const files = [file('ModA/ModA/descriptor.mod'), file('ModA/ModA/common/ideas/x.txt'), file('ModB/ModB/descriptor.mod'), file('ModB/ModB/common/ideas/x.txt')];
