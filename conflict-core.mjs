@@ -232,13 +232,28 @@ export function normalizeZipEntries(entries) {
   return { paths, duplicateEntries, skippedService, skippedUnsafe, warnings: root.warnings, wrapper: root.wrapper };
 }
 
-export function findEndRecord(bytes) {
+export function findEndRecord(bytes, absoluteOffset = 0) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const min = Math.max(0, bytes.length - 65_557);
+  let best = null;
   for (let offset = bytes.length - 22; offset >= min; offset--) {
     if (view.getUint32(offset, true) !== 0x06054b50) continue;
     const commentLength = view.getUint16(offset + 20, true);
-    if (offset + 22 + commentLength <= bytes.length) return { view, offset };
+    if (offset + 22 + commentLength > bytes.length) continue;
+
+    // Trailing data is allowed, but it can itself contain an EOCD signature.
+    // Prefer the candidate whose central directory reaches furthest into the
+    // archive, and keep the earliest candidate when scores tie (empty ZIPs).
+    const entries = view.getUint16(offset + 10, true);
+    const directorySize = view.getUint32(offset + 12, true);
+    const directoryOffset = view.getUint32(offset + 16, true);
+    const zip64 = entries === 0xffff || directorySize === 0xffffffff || directoryOffset === 0xffffffff;
+    const directoryEnd = zip64 ? -1 : directoryOffset + directorySize;
+    const endOffset = absoluteOffset + offset;
+    if (!zip64 && (directoryEnd > endOffset || (entries === 0) !== (directorySize === 0))) continue;
+    const score = zip64 ? 0 : directoryEnd;
+    if (!best || score > best.score || (score === best.score && offset < best.offset)) best = { view, offset, score };
   }
+  if (best) return { view: best.view, offset: best.offset };
   throw new Error('invalid ZIP');
 }
