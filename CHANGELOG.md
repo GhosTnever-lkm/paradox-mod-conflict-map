@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.4 - 2026-10-24
+
+- Reject selected folder paths containing NUL characters, matching the unsafe-path checks applied to ZIP entries.
+- Add a regression test for NUL-containing folder paths.
+
 ## 0.4.3 - 2026-10-20
 
 - Ignore a false ZIP end-record signature appended after an otherwise valid archive, while continuing to accept trailing bytes.
