@@ -90,6 +90,18 @@ test('service files and VCS internals do not become overlaps', () => {
   assert.deepEqual(folder.paths.map((item) => item.display), ['common/game.txt']);
 });
 
+test('thumbnail-like filenames inside game content roots remain comparable assets', () => {
+  const wrapped = normalizeZipEntries([entry('Mod/descriptor.mod'), entry('Mod/gfx/thumbnail.png')]);
+  assert.deepEqual(wrapped.paths.map((item) => item.display), ['gfx/thumbnail.png']);
+  const common = normalizeZipEntries([entry('common/thumbnail.png')]);
+  assert.deepEqual(common.paths.map((item) => item.display), ['common/thumbnail.png']);
+  const folder = normalizeFolderEntries([{ relative: 'gfx/preview.png', file: { size: 5 } }]);
+  assert.deepEqual(folder.paths.map((item) => item.display), ['gfx/preview.png']);
+  const workshop = normalizeZipEntries([entry('thumbnail.png')]);
+  assert.equal(workshop.paths.length, 0);
+  assert.equal(workshop.skippedService, 1);
+});
+
 test('no descriptor keeps the complete selected folder; a nested sample never silently drops other files', () => {
   const noDescriptor = normalizeSelectedFolder([file('Mod/common/x.txt'), file('Mod/notes.txt')])[0];
   assert.equal(noDescriptor.warning, 'noDescriptor');

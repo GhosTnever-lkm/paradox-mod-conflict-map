@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.5 - 2026-10-25
+
+- Preserve thumbnail- and preview-named files under recognized game content roots so real asset overlaps are not hidden.
+- Keep root and mod-wrapper Workshop preview images excluded as service files.
+- Add regression coverage for ZIPs and selected folders.
+
 ## 0.4.4 - 2026-10-24
 
 - Reject selected folder paths containing NUL characters, matching the unsafe-path checks applied to ZIP entries.
