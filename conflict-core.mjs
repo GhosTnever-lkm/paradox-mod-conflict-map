@@ -204,7 +204,7 @@ export function normalizeFolderEntries(entries, modRoot = '') {
     const display = modRoot ? relative.slice(modRoot.length + 1) : relative;
     if (!display || display.split('/').at(-1).toLowerCase() === 'descriptor.mod') continue;
     if (entry.unsafe) { skippedUnsafe++; continue; }
-    if (display.startsWith('/') || /^[a-z]:\//i.test(display) || display.split('/').includes('..') || display.includes('\\0')) { skippedUnsafe++; continue; }
+    if (display.startsWith('/') || /^[a-z]:\//i.test(display) || display.split('/').includes('..') || display.includes('\u0000')) { skippedUnsafe++; continue; }
     if (isServicePath(display)) { skippedService++; continue; }
     const key = display.toLowerCase();
     if (seen.has(key)) { duplicateEntries++; continue; }

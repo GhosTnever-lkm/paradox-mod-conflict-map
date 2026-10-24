@@ -119,6 +119,9 @@ test('unsafe paths are counted, excluded, and cannot create a valid empty folder
   assert.equal(result.paths.length, 1);
   assert.equal(result.duplicateEntries, 1);
   assert.equal(result.skippedUnsafe, 1);
+  const nulPath = normalizeFolderEntries([{ relative: 'common/bad\u0000name.txt', file: { size: 1 } }]);
+  assert.equal(nulPath.paths.length, 0);
+  assert.equal(nulPath.skippedUnsafe, 1);
   const onlyUnsafe = normalizeZipEntries([{ ...entry('../escape'), unsafe: true }]);
   assert.equal(onlyUnsafe.paths.length, 0);
   assert.equal(onlyUnsafe.skippedUnsafe, 1);
